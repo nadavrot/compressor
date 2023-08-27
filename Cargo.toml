@@ -1,0 +1,38 @@
+[package]
+name = "compressor"
+version = "0.0.1"
+authors = ["Nadav Rotem <nadav256@gmail.com>"]
+edition = "2021"
+description = "A modern compressor"
+license = "MIT"
+readme = "README.md"
+
+[lib]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "cli"
+test = false
+bench = false
+
+[dev-dependencies]
+criterion = "0.4"
+
+[[bench]]
+name = "bv"
+harness = false
+
+[[bench]]
+name = "lz"
+harness = false
+
+[dependencies]
+rand = "0.8.5"
+rand_distr = "0.4.3"
+clap = "4.0.18"
+arpfloat = "0.1.9"
+log = "0.4.17"
+env_logger = "0.9"
+
