@@ -1,14 +1,18 @@
 # Compressor
 
-Compressor is an implementation of a modern compressor that uses LZ matching and
-entropy coding (fse). The compressor is able to achieve compression rates that
-are similar to gzip, zstandard and lzfse. The compressor is written in rust
-without external dependencies and should be readable.
+**Compressor** is an implementation of a modern lossless compressor that uses LZ
+matching and entropy coding (fse). The compressor is able to achieve
+compression rates that are similar to gzip, zstandard and lzfse.
+The compressor is written in rust without external dependencies. The code is
+written in a clear way for educational purposes.
 
+The matcher in this project has a non-trivial look-ahead parser, and a multi-way
+cache. The FSE encoder is similar to the encoders used by zstd and lzfse.
 
-# Command line tool
+## Command line tool
 
-The compressor comes with a command line tool that can compress and decompress files. To enable detailed logging set the environment variable RUST_LOG=info. 
+The compressor comes with a command line tool that can compress and decompress
+files. To enable detailed logging set the environment variable `RUST_LOG=info`.
 
 ```txt
 $ cli ./data/bench/dickens -o /tmp/dickens.rz
@@ -19,7 +23,7 @@ $ cli ./data/bench/dickens -o /tmp/dickens.rz
 [INFO  cli] Operation completed in 6.5786204 seconds
 ```
 
-# Benchmark
+## Benchmark
 
 The following charts show how the new compressor compares against other
 compressors. The different programs are evaluated on the enwik9 benchmark, from
@@ -43,7 +47,7 @@ entropy encoding. This benchmark zooms in on the entropy encoding part of the
 compression.  This [tool](scripts/gen_sharp_input.py) is generating inputs
 without repetitions but with a non-uniform distribution of symbols. The results
 demonstrate that the entropy encoding of the compressor is effective, and
-that modern FSE techniques outperform gaip's Huffman coding.
+that modern FSE techniques outperform gzip's Huffman coding.
 
 ![FSE Chart](docs/fse.svg)
 
