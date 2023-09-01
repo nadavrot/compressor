@@ -8,11 +8,9 @@ fn test_matcher() {
     ];
 
     let mut matcher = Matcher::<1024, 256>::new(&input);
-
-    let mut iter = matcher.iter();
-    let (lit0, mat0) = iter.next().unwrap();
-    let (lit1, mat1) = iter.next().unwrap();
-    assert!(iter.next().is_none());
+    let (lit0, mat0) = matcher.next().unwrap();
+    let (lit1, mat1) = matcher.next().unwrap();
+    assert!(matcher.next().is_none());
     assert_eq!(lit0.start, 0);
     assert_eq!(lit0.len(), 8);
     assert_eq!(mat0.start, 0);

@@ -3,7 +3,7 @@
 //! and entropy encoding.
 
 use crate::coding::simple::{SimpleDecoder, SimpleEncoder};
-use crate::lz::matcher::Matcher;
+use crate::lz::matcher::select_matcher;
 use crate::nop::{NopDecoder, NopEncoder};
 use crate::utils::signatures::{match_signature, BLOCK_SIG};
 
@@ -57,7 +57,7 @@ pub struct BlockEncoder<'a> {
 
 impl<'a> BlockEncoder<'a> {
     fn encode_buffer(input: &'a [u8]) -> Vec<u8> {
-        let mut matcher = Matcher::<65536, 65536>::new(input);
+        let matcher = select_matcher(1, input);
 
         let mut lits: Vec<u8> = Vec::new();
         let mut lit_lens: Vec<u32> = Vec::new();
@@ -66,7 +66,7 @@ impl<'a> BlockEncoder<'a> {
         let mut mat_lens: Vec<u32> = Vec::new();
 
         let mut prev_match = 0;
-        for (lit, mat) in matcher.iter() {
+        for (lit, mat) in matcher {
             // Serialize the literals and the length of each segment.
             let literals = &input[lit.clone()];
             lits.extend(literals);

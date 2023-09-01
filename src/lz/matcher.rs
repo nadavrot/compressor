@@ -253,44 +253,28 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
 
         Some((lit, 0..0))
     }
-
-    pub fn iter(&'a mut self) -> MatchIterator<'a, MAX_OFFSET, MAX_MATCH> {
-        MatchIterator { matcher: self }
-    }
-}
-
-pub struct MatchIterator<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> {
-    matcher: &'a mut Matcher<'a, MAX_OFFSET, MAX_MATCH>,
-}
-
-impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> Iterator
-    for MatchIterator<'a, MAX_OFFSET, MAX_MATCH>
-{
-    type Item = (Range<usize>, Range<usize>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.matcher.get_next_match_region()
-    }
 }
 
 /// An optimal Lempel–Ziv based matcher.
-pub struct OptimalMatcher<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> {
-    /// The input to tokenize.
-    dict: LzDictionary<'a, MAX_OFFSET, MAX_MATCH>,
+pub struct OptimalMatcher<const MAX_OFFSET: usize, const MAX_MATCH: usize> {
+    matches: Vec<(Range<usize>, Range<usize>)>,
+    curr: usize,
 }
 
 impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
-    OptimalMatcher<'a, MAX_OFFSET, MAX_MATCH>
+    OptimalMatcher<MAX_OFFSET, MAX_MATCH>
 {
     pub fn new(input: &'a [u8]) -> Self {
         Self {
-            dict: LzDictionary::new(input),
+            matches: Self::get_matches(input),
+            curr: 0,
         }
     }
 
-    fn get_matches(&mut self) -> Vec<(Range<usize>, Range<usize>)> {
+    fn get_matches(input: &'a [u8]) -> Vec<(Range<usize>, Range<usize>)> {
+        let mut dict = LzDictionary::<MAX_OFFSET, MAX_MATCH>::new(input);
         let mut all_matches = Vec::new();
-        let input_len = self.dict.len();
+        let input_len = dict.len();
 
         if input_len <= MIN_MATCH {
             let lit = 0..input_len;
@@ -300,8 +284,8 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
         for cursor in 0..input_len - MIN_MATCH {
             // Check if there is a previous match, and save the hash.
 
-            let mat = self.dict.get_match(cursor);
-            self.dict.save_match(cursor);
+            let mat = dict.get_match(cursor);
+            dict.save_match(cursor);
             all_matches.push(mat);
         }
         for _ in 0..MIN_MATCH {
@@ -363,26 +347,46 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
 
         selected_matches
     }
+}
 
-    pub fn iter(&'a mut self) -> OptimalMatchIterator {
-        let list = self.get_matches();
-        OptimalMatchIterator { list, item: 0 }
+/// Implement the iterator trait for the matcher.
+impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> Iterator
+    for Matcher<'a, MAX_OFFSET, MAX_MATCH>
+{
+    type Item = (Range<usize>, Range<usize>);
+
+    fn next(&mut self) -> Option<(Range<usize>, Range<usize>)> {
+        self.get_next_match_region()
     }
 }
 
-pub struct OptimalMatchIterator {
-    list: Vec<(Range<usize>, Range<usize>)>,
-    item: usize,
-}
-
-impl Iterator for OptimalMatchIterator {
+/// Implement the iterator trait for the optimal matcher.
+impl<const MAX_OFFSET: usize, const MAX_MATCH: usize> Iterator
+    for OptimalMatcher<MAX_OFFSET, MAX_MATCH>
+{
     type Item = (Range<usize>, Range<usize>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.item < self.list.len() {
-            self.item += 1;
-            return Some(self.list[self.item - 1].clone());
+        if self.curr < self.matches.len() {
+            self.curr += 1;
+            return Some(self.matches[self.curr - 1].clone());
         }
         None
     }
+}
+
+/// Select the LZ matcher and matcher parameters based on the compression
+/// 'level'.
+/// Returns an iterator that iterates over the matches.
+pub fn select_matcher<'a>(
+    level: usize,
+    input: &'a [u8],
+) -> Box<dyn Iterator<Item = (Range<usize>, Range<usize>)> + 'a> {
+    if level > 5 {
+        let mat = OptimalMatcher::<65536, 65536>::new(input);
+        return Box::new(mat);
+    }
+
+    let mat = Matcher::<'a, 65536, 65536>::new(input);
+    Box::new(mat)
 }

@@ -93,11 +93,10 @@ impl<'a> LZ4Encoder<'a> {
 
         // Construct a matcher.
         // Rule 2:The last 5 bytes are always literals. Don't try to match them.
-        let mut matcher =
-            Matcher::<65536, 65536>::new(&self.input[..(len - 5)]);
+        let matcher = Matcher::<65536, 65536>::new(&self.input[..(len - 5)]);
 
         let mut last_encoded = 0;
-        for (lit, mat) in matcher.iter() {
+        for (lit, mat) in matcher {
             let literals = &self.input[lit.clone()];
 
             // The last match must start at least 12 bytes before the block end.

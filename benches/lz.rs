@@ -12,15 +12,15 @@ fn get_large_array(items: usize) -> Vec<u8> {
 
 fn match_large_buffer() {
     let input = get_large_array(1_000_000);
-    let mut matcher = Matcher::<65536, 1024>::new(&input);
-    let cnt = matcher.iter().count();
+    let matcher = Matcher::<65536, 1024>::new(&input);
+    let cnt = matcher.count();
     black_box(cnt);
 }
 
 fn match_small_buffer() {
     let input = get_large_array(1_000);
-    let mut matcher = Matcher::<65536, 256>::new(&input);
-    let cnt = matcher.iter().count();
+    let matcher = Matcher::<65536, 256>::new(&input);
+    let cnt = matcher.count();
     black_box(cnt);
 }
 
