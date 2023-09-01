@@ -91,7 +91,7 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
 
     /// Return a match to a previous string that matches a string that starts at
     /// 'idx'.
-    fn get_match(&self, idx: usize) -> Option<Range<usize>> {
+    fn get_match(&self, idx: usize) -> Range<usize> {
         let dic_idx = self.get_match_candidate(idx);
         let mut best = 0..0;
 
@@ -116,9 +116,9 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
         }
 
         if best.len() >= 4 {
-            Some(best)
+            best
         } else {
-            None
+            0..0
         }
     }
 
@@ -202,14 +202,14 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
             let mat = self.dict.get_match(self.cursor);
             self.dict.save_match(self.cursor);
 
-            if let Some(mut mat) = mat {
+            if !mat.is_empty() {
                 // If we found a match, try to see if one of the next chars is a
                 // better candidate.
                 let end_of_buffer = self.cursor + MIN_MATCH * 2 > input_len;
                 if ENABLE_OPT_PARSE && !end_of_buffer {
                     for i in 1..PARSE_MAX_SEARCH {
-                        if let Some(mat2) = self.dict.get_match(self.cursor + i)
-                        {
+                        let mat2 = self.dict.get_match(self.cursor + i);
+                        if !mat2.is_empty() {
                             // If we skip one char we might find a better match!
                             if mat2.len() >= mat.len() + i {
                                 self.cursor += i;
@@ -235,7 +235,7 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
 
                 // Update the cursor and return the match.
                 self.cursor += mat.len();
-                mat = mat.start - reduce..mat.end;
+                let mat = mat.start - reduce..mat.end;
                 lit = lit.start..lit.end - reduce;
                 return Some((lit, mat));
             }
@@ -270,5 +270,119 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> Iterator
 
     fn next(&mut self) -> Option<Self::Item> {
         self.matcher.get_next_match_region()
+    }
+}
+
+/// An optimal Lempel–Ziv based matcher.
+pub struct OptimalMatcher<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> {
+    /// The input to tokenize.
+    dict: LzDictionary<'a, MAX_OFFSET, MAX_MATCH>,
+}
+
+impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
+    OptimalMatcher<'a, MAX_OFFSET, MAX_MATCH>
+{
+    pub fn new(input: &'a [u8]) -> Self {
+        Self {
+            dict: LzDictionary::new(input),
+        }
+    }
+
+    fn get_matches(&mut self) -> Vec<(Range<usize>, Range<usize>)> {
+        let mut all_matches = Vec::new();
+        let input_len = self.dict.len();
+
+        if input_len <= MIN_MATCH {
+            let lit = 0..input_len;
+            return vec![(lit, 0..0)];
+        }
+
+        for cursor in 0..input_len - MIN_MATCH {
+            // Check if there is a previous match, and save the hash.
+
+            let mat = self.dict.get_match(cursor);
+            self.dict.save_match(cursor);
+            all_matches.push(mat);
+        }
+        for _ in 0..MIN_MATCH {
+            all_matches.push(0..0);
+        }
+
+        assert_eq!(all_matches.len(), input_len);
+
+        let mut distance_to_end: Vec<usize> = vec![usize::MAX; input_len + 1];
+
+        let match_cost = 3;
+        distance_to_end[input_len] = 0;
+        for i in (0..input_len).rev() {
+            let mat = all_matches[i].clone();
+            // Cost of not taking the match.
+            let no_match_cost = distance_to_end[i + 1] + 1;
+            if mat.is_empty() {
+                distance_to_end[i] = no_match_cost;
+                continue;
+            }
+
+            let mut lowest = no_match_cost;
+            for len in (MIN_MATCH..mat.len() + 1).rev() {
+                let target = i + len;
+                // Calculate the cost of the match.
+                let taken_match_cost = match_cost + distance_to_end[target];
+                // Figure out if it's better to shorten the match.
+                if lowest >= taken_match_cost {
+                    lowest = taken_match_cost;
+                    // Shorten the match.
+                    all_matches[i] = mat.start..mat.start + len;
+                }
+            }
+            // Check if it's worthwhile doing a match at all.
+            if lowest == no_match_cost || all_matches[i].len() < MIN_MATCH {
+                all_matches[i] = 0..0;
+            }
+            distance_to_end[i] = lowest;
+        }
+
+        let mut lit = 0..0;
+        let mut curr = 0;
+
+        let mut selected_matches = Vec::new();
+
+        while curr < input_len {
+            let mat = all_matches[curr].clone();
+            if !mat.is_empty() {
+                selected_matches.push((lit.clone(), mat.clone()));
+                curr += mat.len();
+                lit = curr..curr;
+                continue;
+            } else {
+                lit = lit.start..lit.end + 1;
+                curr += 1;
+            }
+        }
+        selected_matches.push((lit.clone(), 0..0));
+
+        selected_matches
+    }
+
+    pub fn iter(&'a mut self) -> OptimalMatchIterator {
+        let list = self.get_matches();
+        OptimalMatchIterator { list, item: 0 }
+    }
+}
+
+pub struct OptimalMatchIterator {
+    list: Vec<(Range<usize>, Range<usize>)>,
+    item: usize,
+}
+
+impl Iterator for OptimalMatchIterator {
+    type Item = (Range<usize>, Range<usize>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.item < self.list.len() {
+            self.item += 1;
+            return Some(self.list[self.item - 1].clone());
+        }
+        None
     }
 }
