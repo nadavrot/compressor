@@ -21,11 +21,9 @@ const PARSE_MAX_SEARCH: usize = 4;
 const MIN_MATCH: usize = 4;
 
 /// A Lempel–Ziv based matcher.
-pub struct Matcher<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> {
+struct LzDictionary<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> {
     /// The input to tokenize.
     input: &'a [u8],
-    /// The iterator location in the input.
-    cursor: usize,
     /// Maps a sequence of bytes to their index in the sequence.
     /// The match could be a hash collision or an uninitialized value.
     /// Matches may reside in one of the rotating LRU banks.
@@ -33,15 +31,20 @@ pub struct Matcher<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> {
 }
 
 impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
-    Matcher<'a, MAX_OFFSET, MAX_MATCH>
+    LzDictionary<'a, MAX_OFFSET, MAX_MATCH>
 {
     pub fn new(input: &'a [u8]) -> Self {
         Self {
             input,
-            cursor: 0,
             dict: Box::from([EMPTY_CELL; DICTIONARY_SIZE * DICTIONARY_BANKS]),
         }
     }
+
+    /// Returns the length of the input string
+    pub fn len(&self) -> usize {
+        self.input.len()
+    }
+
     fn get_bytes_at(&self, idx: usize) -> u32 {
         let val: [u8; 4] =
             self.input[idx..idx + 4].try_into().expect("Out of bounds");
@@ -160,6 +163,25 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
         }
         i
     }
+}
+
+/// A Lempel–Ziv based matcher.
+pub struct Matcher<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> {
+    /// The input to tokenize.
+    dict: LzDictionary<'a, MAX_OFFSET, MAX_MATCH>,
+    /// The iterator location in the input.
+    cursor: usize,
+}
+
+impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
+    Matcher<'a, MAX_OFFSET, MAX_MATCH>
+{
+    pub fn new(input: &'a [u8]) -> Self {
+        Self {
+            dict: LzDictionary::new(input),
+            cursor: 0,
+        }
+    }
 
     /// Return the next literal and match regions, which could be empty.
     /// The indices in the regions are absolute from the beginning of the
@@ -169,7 +191,7 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
     ) -> Option<(Range<usize>, Range<usize>)> {
         // Grow the literal section, and on each step look for a previous match.
         let mut lit = self.cursor..self.cursor;
-        let input_len = self.input.len();
+        let input_len = self.dict.len();
         if self.cursor == input_len {
             return None;
         }
@@ -177,8 +199,8 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
         // For each character in the input buffer:
         'outer: while self.cursor + MIN_MATCH < input_len {
             // Check if there is a previous match, and save the hash.
-            let mat = self.get_match(self.cursor);
-            self.save_match(self.cursor);
+            let mat = self.dict.get_match(self.cursor);
+            self.dict.save_match(self.cursor);
 
             if let Some(mut mat) = mat {
                 // If we found a match, try to see if one of the next chars is a
@@ -186,7 +208,8 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
                 let end_of_buffer = self.cursor + MIN_MATCH * 2 > input_len;
                 if ENABLE_OPT_PARSE && !end_of_buffer {
                     for i in 1..PARSE_MAX_SEARCH {
-                        if let Some(mat2) = self.get_match(self.cursor + i) {
+                        if let Some(mat2) = self.dict.get_match(self.cursor + i)
+                        {
                             // If we skip one char we might find a better match!
                             if mat2.len() >= mat.len() + i {
                                 self.cursor += i;
@@ -199,7 +222,7 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
 
                 // Try to increase the size of the match backwards and take from
                 // the literals.
-                let reduce = self.grow_match_backwards(&lit, &mat);
+                let reduce = self.dict.grow_match_backwards(&lit, &mat);
 
                 // Insert all of the hashes in the input into the dictionary.
                 // Don't insert the next value because we don't want to have it
@@ -207,7 +230,7 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
                 let start = self.cursor + 1;
                 let stop = (start + mat.len()).min(input_len - MIN_MATCH) - 1;
                 for i in start..stop {
-                    self.save_match(i);
+                    self.dict.save_match(i);
                 }
 
                 // Update the cursor and return the match.
@@ -223,7 +246,7 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
         }
 
         // We are close to the end of the buffer. Grow the literal section.
-        while self.cursor < self.input.len() {
+        while self.cursor < input_len {
             self.cursor += 1;
             lit = lit.start..lit.end + 1;
         }
