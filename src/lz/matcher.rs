@@ -18,7 +18,6 @@ struct LzDictionary<
     const MAX_MATCH: usize,
     const DICT_SIZE_BITS: usize,
     const DICT_BANKS: usize,
-    const PARSE_SEARCH: usize,
 > {
     /// The input to tokenize.
     input: &'a [u8],
@@ -34,16 +33,7 @@ impl<
         const MAX_MATCH: usize,
         const DICT_SIZE_BITS: usize,
         const DICT_BANKS: usize,
-        const PARSE_SEARCH: usize,
-    >
-    LzDictionary<
-        'a,
-        MAX_OFFSET,
-        MAX_MATCH,
-        DICT_SIZE_BITS,
-        DICT_BANKS,
-        PARSE_SEARCH,
-    >
+    > LzDictionary<'a, MAX_OFFSET, MAX_MATCH, DICT_SIZE_BITS, DICT_BANKS>
 {
     pub fn new(input: &'a [u8]) -> Self {
         Self {
@@ -177,7 +167,8 @@ impl<
     }
 }
 
-/// A Lempel–Ziv based matcher.
+/// A Lempel–Ziv based matcher. It performs parsing with a lookahead window of
+/// 'PARSE_SEARCH' items.
 pub struct Matcher<
     'a,
     const MAX_OFFSET: usize,
@@ -187,14 +178,7 @@ pub struct Matcher<
     const PARSE_SEARCH: usize,
 > {
     /// The input to tokenize.
-    dict: LzDictionary<
-        'a,
-        MAX_OFFSET,
-        MAX_MATCH,
-        DICT_SIZE_BITS,
-        DICT_BANKS,
-        PARSE_SEARCH,
-    >,
+    dict: LzDictionary<'a, MAX_OFFSET, MAX_MATCH, DICT_SIZE_BITS, DICT_BANKS>,
     /// The iterator location in the input.
     cursor: usize,
 }
@@ -298,7 +282,6 @@ pub struct OptimalMatcher<
     const MAX_MATCH: usize,
     const DICT_SIZE_BITS: usize,
     const DICT_BANKS: usize,
-    const PARSE_SEARCH: usize,
 > {
     matches: Vec<(Range<usize>, Range<usize>)>,
     curr: usize,
@@ -310,15 +293,7 @@ impl<
         const MAX_MATCH: usize,
         const DICT_SIZE_BITS: usize,
         const DICT_BANKS: usize,
-        const PARSE_SEARCH: usize,
-    >
-    OptimalMatcher<
-        MAX_OFFSET,
-        MAX_MATCH,
-        DICT_SIZE_BITS,
-        DICT_BANKS,
-        PARSE_SEARCH,
-    >
+    > OptimalMatcher<MAX_OFFSET, MAX_MATCH, DICT_SIZE_BITS, DICT_BANKS>
 {
     pub fn new(input: &'a [u8]) -> Self {
         Self {
@@ -333,7 +308,6 @@ impl<
             MAX_MATCH,
             DICT_SIZE_BITS,
             DICT_BANKS,
-            PARSE_SEARCH,
         >::new(input);
         let mut all_matches = Vec::new();
         let input_len = dict.len();
@@ -445,15 +419,8 @@ impl<
         const MAX_MATCH: usize,
         const DICT_SIZE_BITS: usize,
         const DICT_BANKS: usize,
-        const PARSE_SEARCH: usize,
     > Iterator
-    for OptimalMatcher<
-        MAX_OFFSET,
-        MAX_MATCH,
-        DICT_SIZE_BITS,
-        DICT_BANKS,
-        PARSE_SEARCH,
-    >
+    for OptimalMatcher<MAX_OFFSET, MAX_MATCH, DICT_SIZE_BITS, DICT_BANKS>
 {
     type Item = (Range<usize>, Range<usize>);
 
@@ -481,8 +448,8 @@ pub fn select_matcher<'a>(
         5 => Box::new(Matcher::<'a, 65536, 65536, 18, 16, 2>::new(input)),
         6 => Box::new(Matcher::<'a, 65536, 65536, 19, 32, 4>::new(input)),
         7 => Box::new(Matcher::<'a, 65536, 65536, 19, 64, 4>::new(input)),
-        8 => Box::new(OptimalMatcher::<65536, 65536, 19, 64, 4>::new(input)),
-        9 => Box::new(OptimalMatcher::<65536, 65536, 19, 64, 4>::new(input)),
+        8 => Box::new(OptimalMatcher::<65536, 65536, 19, 64>::new(input)),
+        9 => Box::new(OptimalMatcher::<65536, 65536, 19, 64>::new(input)),
         _ => panic!(),
     };
 }
