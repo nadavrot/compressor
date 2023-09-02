@@ -373,8 +373,11 @@ impl<
         while curr < input_len {
             let mat = all_matches[curr].clone();
             if !mat.is_empty() {
-                selected_matches.push((lit.clone(), mat.clone()));
+                let reduce = dict.grow_match_backwards(&lit, &mat);
                 curr += mat.len();
+                let lt = lit.start..lit.end - reduce;
+                let mt = mat.start - reduce..mat.end;
+                selected_matches.push((lt, mt));
                 lit = curr..curr;
                 continue;
             } else {
