@@ -13,21 +13,21 @@ use crate::utils::array_encoding::encode as encode_arr;
 use crate::utils::variable_length_encoding::decode_array32 as decode_vl32;
 use crate::utils::variable_length_encoding::encode_array32 as encode_vl32;
 
-use crate::{Decoder, Encoder};
+use crate::{Context, Decoder, Encoder};
 
 type EncoderTy<'a> = SimpleEncoder<'a, 256, 4096>;
 type DecoderTy<'a> = SimpleDecoder<'a, 256, 4096>;
 
 //. Try to perform entropy encoding, but if it fails use nop encoding.
-fn encode_entropy(input: &[u8]) -> Vec<u8> {
+fn encode_entropy(input: &[u8], ctx: Context) -> Vec<u8> {
     let mut encoded: Vec<u8> = Vec::new();
-    let new_size = EncoderTy::new(input, &mut encoded).encode();
+    let new_size = EncoderTy::new(input, &mut encoded, ctx).encode();
 
     if new_size < input.len() {
         return encoded;
     }
     encoded.clear();
-    let _ = NopEncoder::new(input, &mut encoded).encode();
+    let _ = NopEncoder::new(input, &mut encoded, ctx).encode();
     encoded
 }
 
@@ -53,10 +53,12 @@ pub struct BlockEncoder<'a> {
     input: &'a [u8],
     /// The output stream.
     output: &'a mut Vec<u8>,
+    /// Encoder context.
+    ctx: Context,
 }
 
 impl<'a> BlockEncoder<'a> {
-    fn encode_buffer(input: &'a [u8]) -> Vec<u8> {
+    fn encode_buffer(input: &'a [u8], ctx: Context) -> Vec<u8> {
         let matcher = select_matcher(1, input);
 
         let mut lits: Vec<u8> = Vec::new();
@@ -97,11 +99,11 @@ impl<'a> BlockEncoder<'a> {
         encode_vl32(&mat_lens, &mut mat_len_u8);
 
         // Entropy encode what is possible.
-        let lit_stream2 = encode_entropy(&lits);
-        let lit_len_stream2 = encode_entropy(&lit_len_u8);
-        let mat_off_high2 = encode_entropy(&mat_offs_high);
-        let mat_off_low2 = encode_entropy(&mat_offs_low);
-        let mat_len_stream2 = encode_entropy(&mat_len_u8);
+        let lit_stream2 = encode_entropy(&lits, ctx);
+        let lit_len_stream2 = encode_entropy(&lit_len_u8, ctx);
+        let mat_off_high2 = encode_entropy(&mat_offs_high, ctx);
+        let mat_off_low2 = encode_entropy(&mat_offs_low, ctx);
+        let mat_len_stream2 = encode_entropy(&mat_len_u8, ctx);
 
         // To the wire!
         let mut result = Vec::new();
@@ -118,7 +120,7 @@ impl<'a> BlockEncoder<'a> {
         self.output.extend(BLOCK_SIG);
 
         // Compress the content and write it to the output.
-        let res = Self::encode_buffer(self.input);
+        let res = Self::encode_buffer(self.input, self.ctx);
         self.output.extend(&res);
 
         // Bytes written plus the signature.
@@ -217,8 +219,8 @@ impl<'a> BlockDecoder<'a> {
 }
 
 impl<'a> Encoder<'a> for BlockEncoder<'a> {
-    fn new(input: &'a [u8], output: &'a mut Vec<u8>) -> Self {
-        BlockEncoder { input, output }
+    fn new(input: &'a [u8], output: &'a mut Vec<u8>, ctx: Context) -> Self {
+        BlockEncoder { input, output, ctx }
     }
 
     fn encode(&mut self) -> usize {

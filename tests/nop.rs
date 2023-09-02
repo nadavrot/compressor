@@ -1,11 +1,12 @@
 use compressor::nop::{NopDecoder, NopEncoder};
-use compressor::{Decoder, Encoder};
+use compressor::{Context, Decoder, Encoder};
 
 fn round_trip(input: &[u8]) {
     let mut compressed: Vec<u8> = Vec::new();
+    let ctx = Context::new(9, 0);
 
     {
-        let mut encoder = NopEncoder::new(input, &mut compressed);
+        let mut encoder = NopEncoder::new(input, &mut compressed, ctx);
         let written = encoder.encode();
         assert_eq!(written, compressed.len());
     }

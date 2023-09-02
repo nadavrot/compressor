@@ -9,7 +9,7 @@ use clap::{Arg, ArgAction, Command};
 use compressor::full::{FullDecoder, FullEncoder};
 use compressor::lz::{LZ4Decoder, LZ4Encoder};
 use compressor::utils::signatures::{FILE_EXTENSION, FULL_SIG, LZ4_SIG};
-use compressor::{Decoder, Encoder};
+use compressor::{Context, Decoder, Encoder};
 
 use std::{fs, time::Instant};
 use std::{fs::File, io::Write};
@@ -53,17 +53,19 @@ fn handle_buffers(
 ) -> Option<(usize, usize)> {
     let x = Timer::new();
 
+    let ctx = Context::new(9, 1 << 20);
+
     if is_compress {
         if is_full {
             log::info!("Compressing using the Full compressor");
-            let mut encoder = FullEncoder::new(input, output);
+            let mut encoder = FullEncoder::new(input, output, ctx);
             let written = encoder.encode();
             return Some((input.len(), written));
         }
 
         log::info!("Compressing using the LZ4 compressor");
         output.extend(LZ4_SIG);
-        let mut encoder = LZ4Encoder::new(input, output);
+        let mut encoder = LZ4Encoder::new(input, output, ctx);
         let written = encoder.encode();
         return Some((input.len(), written));
     }

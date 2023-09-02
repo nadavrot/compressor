@@ -2,7 +2,7 @@
 
 use crate::bitvector::Bitvector;
 use crate::coding::hist::{num_bits, Histogram};
-use crate::{Decoder, Encoder};
+use crate::{Context, Decoder, Encoder};
 
 type DecodeTable = Vec<(u32, u8)>;
 
@@ -368,7 +368,7 @@ impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
 impl<'a, const ALPHABET: usize, const TABLESIZE: usize> Encoder<'a>
     for SimpleEncoder<'a, ALPHABET, TABLESIZE>
 {
-    fn new(input: &'a [u8], output: &'a mut Vec<u8>) -> Self {
+    fn new(input: &'a [u8], output: &'a mut Vec<u8>, _ctx: Context) -> Self {
         SimpleEncoder {
             input,
             output,

@@ -1,6 +1,6 @@
 use compressor::coding::simple::{SimpleDecoder, SimpleEncoder};
-use compressor::Decoder;
 use compressor::Encoder;
+use compressor::{Context, Decoder};
 use rand_distr::Distribution;
 
 type EncoderTy<'a> = SimpleEncoder<'a, 256, 4096>;
@@ -12,9 +12,10 @@ fn test_round_trip_simple_encoder() {
     let text = text.as_bytes();
     let mut compressed: Vec<u8> = Vec::new();
     let mut decompressed: Vec<u8> = Vec::new();
+    let ctx = Context::new(9, 1 << 20);
 
     // Define an encoder with 8bit symbols, and 12bit states.
-    let _ = EncoderTy::new(text, &mut compressed).encode();
+    let _ = EncoderTy::new(text, &mut compressed, ctx).encode();
     let _ = DecoderTy::new(&compressed, &mut decompressed).decode();
 
     println!("Decoded {:?}", decompressed);
@@ -25,9 +26,11 @@ fn test_round_trip_simple_encoder() {
 
 #[allow(dead_code)]
 fn round_trip(input: &[u8]) {
+    let ctx = Context::new(9, 1 << 20);
+
     let mut compressed = Vec::new();
     // Define an encoder with 8bit symbols, and 12bit states.
-    let mut enc = EncoderTy::new(input, &mut compressed);
+    let mut enc = EncoderTy::new(input, &mut compressed, ctx);
     let compressed_size = enc.encode();
     assert_eq!(compressed.len(), compressed_size);
 

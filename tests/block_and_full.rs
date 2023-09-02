@@ -1,15 +1,15 @@
 use compressor::block::{BlockDecoder, BlockEncoder};
 use compressor::full::{FullDecoder, FullEncoder};
 use compressor::pager::{PagerDecoder, PagerEncoder};
-use compressor::{Decoder, Encoder};
+use compressor::{Context, Decoder, Encoder};
 
 #[test]
 fn test_block_round_trip() {
     fn round_trip(input: &[u8]) {
         let mut compressed: Vec<u8> = Vec::new();
-
+        let ctx = Context::new(9, 1 << 20);
         {
-            let mut encoder = BlockEncoder::new(input, &mut compressed);
+            let mut encoder = BlockEncoder::new(input, &mut compressed, ctx);
             let written = encoder.encode();
             assert_eq!(written, compressed.len());
         }
@@ -53,9 +53,10 @@ fn test_block_round_trip() {
 fn test_full_round_trip() {
     fn round_trip(input: &[u8]) {
         let mut compressed: Vec<u8> = Vec::new();
+        let ctx = Context::new(9, 1 << 20);
 
         {
-            let mut encoder = FullEncoder::new(input, &mut compressed);
+            let mut encoder = FullEncoder::new(input, &mut compressed, ctx);
             let written = encoder.encode();
             assert_eq!(written, compressed.len());
         }
@@ -96,10 +97,10 @@ fn test_full_round_trip() {
 
 #[test]
 fn test_pager_round_trip() {
-    fn encode_nop(input: &[u8]) -> Vec<u8> {
+    fn encode_nop(input: &[u8], ctx: Context) -> Vec<u8> {
         use compressor::nop::NopEncoder;
         let mut encoded: Vec<u8> = Vec::new();
-        let _ = NopEncoder::new(input, &mut encoded).encode();
+        let _ = NopEncoder::new(input, &mut encoded, ctx).encode();
         encoded
     }
 
@@ -115,9 +116,10 @@ fn test_pager_round_trip() {
 
     fn round_trip(input: &[u8]) {
         let mut compressed: Vec<u8> = Vec::new();
+        let ctx = Context::new(9, 0);
 
         {
-            let mut encoder = PagerEncoder::new(input, &mut compressed);
+            let mut encoder = PagerEncoder::new(input, &mut compressed, ctx);
             encoder.set_callback(encode_nop);
             encoder.set_page_size(15);
             let written = encoder.encode();

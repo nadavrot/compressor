@@ -1,5 +1,5 @@
 use compressor::lz::{LZ4Decoder, LZ4Encoder};
-use compressor::{Decoder, Encoder};
+use compressor::{Context, Decoder, Encoder};
 
 const INPUT0_PLAIN: [u8; 63] = [
     0x74, 0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 0x61, 0x20, 0x74, 0x65,
@@ -30,22 +30,25 @@ fn test_lz4_decoder_const_inputs() {
 }
 
 fn round_trip(input: &[u8]) {
-    let mut compressed: Vec<u8> = Vec::new();
+    for level in [1, 3, 4, 9] {
+        let mut compressed: Vec<u8> = Vec::new();
+        let ctx = Context::new(level, 1 << 20);
 
-    {
-        let mut encoder = LZ4Encoder::new(input, &mut compressed);
-        let written = encoder.encode();
-        assert_eq!(written, compressed.len());
-    }
+        {
+            let mut encoder = LZ4Encoder::new(input, &mut compressed, ctx);
+            let written = encoder.encode();
+            assert_eq!(written, compressed.len());
+        }
 
-    let mut decompressed: Vec<u8> = Vec::new();
-    {
-        let mut decoder = LZ4Decoder::new(&compressed, &mut decompressed);
-        let (consumed, written) = decoder.decode().unwrap();
-        assert_eq!(consumed, compressed.len());
-        assert_eq!(written, input.len());
+        let mut decompressed: Vec<u8> = Vec::new();
+        {
+            let mut decoder = LZ4Decoder::new(&compressed, &mut decompressed);
+            let (consumed, written) = decoder.decode().unwrap();
+            assert_eq!(consumed, compressed.len());
+            assert_eq!(written, input.len());
+        }
+        assert_eq!(decompressed, input);
     }
-    assert_eq!(decompressed, input);
 }
 
 #[test]
@@ -106,8 +109,9 @@ fn test_lz4_decoder_no_crash() {
 
 #[test]
 fn test_lz4_encoder_const_inputs() {
+    let ctx = Context::new(9, 1 << 20);
     let mut stream: Vec<u8> = Vec::new();
-    let mut encoder = LZ4Encoder::new(&INPUT0_PLAIN, &mut stream);
+    let mut encoder = LZ4Encoder::new(&INPUT0_PLAIN, &mut stream, ctx);
     let written = encoder.encode();
     assert_eq!(stream, INPUT0_COMPRESSED);
     assert_eq!(stream.len(), written);

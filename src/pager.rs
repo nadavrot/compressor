@@ -2,10 +2,10 @@
 //! partitioning them into small blocks that are encoded and decoded individually.
 
 use crate::utils::signatures::{match_signature, PAGER_SIG};
-use crate::{Decoder, Encoder};
+use crate::{Context, Decoder, Encoder};
 
 /// A callback for handling the encoding of each block.
-pub type EncodeHandlerTy = fn(input: &[u8]) -> Vec<u8>;
+pub type EncodeHandlerTy = fn(input: &[u8], ctx: Context) -> Vec<u8>;
 /// A callback for handling the decoding of each block.
 pub type DecodeHandlerTy = fn(input: &[u8]) -> Option<(usize, Vec<u8>)>;
 
@@ -18,8 +18,8 @@ pub struct PagerEncoder<'a> {
     output: &'a mut Vec<u8>,
     /// A callback for encoding each block.
     callback: Option<EncodeHandlerTy>,
-    /// Specifies the size of each block.
-    page_size: usize,
+    /// Encoder context.
+    ctx: Context,
 }
 
 impl<'a> PagerEncoder<'a> {
@@ -30,18 +30,18 @@ impl<'a> PagerEncoder<'a> {
 
     /// Sets the size of each page in the stream.
     pub fn set_page_size(&mut self, new_size: usize) {
-        self.page_size = new_size
+        self.ctx.block_size = new_size
     }
 
     /// Perform the encoding.
     fn encode_impl(&mut self) -> usize {
         let mut parts: Vec<&'a [u8]> = Vec::new();
-        assert!(self.page_size > 0, "Must set page size");
+        assert!(self.ctx.block_size > 0, "Must set page size");
 
         // Push the parts to process:
-        for i in 0..(1 + self.input.len() / self.page_size) {
-            let start = self.page_size * i;
-            let end = (self.page_size * (i + 1)).min(self.input.len());
+        for i in 0..(1 + self.input.len() / self.ctx.block_size) {
+            let start = self.ctx.block_size * i;
+            let end = (self.ctx.block_size * (i + 1)).min(self.input.len());
             parts.push(&self.input[start..end]);
         }
 
@@ -52,7 +52,7 @@ impl<'a> PagerEncoder<'a> {
         // Compress each one of the pages using the pipeline.
         let mut written = 0;
         for part in parts {
-            let compressed = callback(part);
+            let compressed = callback(part, self.ctx);
             self.output.extend(compressed.iter());
             written += compressed.len();
         }
@@ -99,12 +99,12 @@ impl<'a> PagerDecoder<'a> {
 }
 
 impl<'a> Encoder<'a> for PagerEncoder<'a> {
-    fn new(input: &'a [u8], output: &'a mut Vec<u8>) -> Self {
+    fn new(input: &'a [u8], output: &'a mut Vec<u8>, ctx: Context) -> Self {
         PagerEncoder {
             input,
             output,
             callback: None,
-            page_size: 0,
+            ctx,
         }
     }
 

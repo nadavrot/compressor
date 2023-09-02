@@ -4,7 +4,7 @@
 use std::ops::Range;
 
 use super::matcher::select_matcher;
-use crate::{Decoder, Encoder};
+use crate::{Context, Decoder, Encoder};
 
 /// An LZ4 Encoder.
 pub struct LZ4Encoder<'a> {
@@ -12,6 +12,8 @@ pub struct LZ4Encoder<'a> {
     input: &'a [u8],
     /// The output stream.
     output: &'a mut Vec<u8>,
+    /// The encoder context.
+    ctx: Context,
 }
 
 impl<'a> LZ4Encoder<'a> {
@@ -93,7 +95,7 @@ impl<'a> LZ4Encoder<'a> {
 
         // Construct a matcher.
         // Rule 2:The last 5 bytes are always literals. Don't try to match them.
-        let matcher = select_matcher(4, &self.input[..(len - 5)]);
+        let matcher = select_matcher(self.ctx.level, &self.input[..(len - 5)]);
 
         let mut last_encoded = 0;
         for (lit, mat) in matcher {
@@ -234,8 +236,8 @@ impl<'a> LZ4Decoder<'a> {
 }
 
 impl<'a> Encoder<'a> for LZ4Encoder<'a> {
-    fn new(input: &'a [u8], output: &'a mut Vec<u8>) -> Self {
-        Self { input, output }
+    fn new(input: &'a [u8], output: &'a mut Vec<u8>, ctx: Context) -> Self {
+        Self { input, output, ctx }
     }
 
     fn encode(&mut self) -> usize {

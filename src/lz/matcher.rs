@@ -440,7 +440,7 @@ impl<
 /// 'level'.
 /// Returns an iterator that iterates over the matches.
 pub fn select_matcher<'a>(
-    level: usize,
+    level: u8,
     input: &'a [u8],
 ) -> Box<dyn Iterator<Item = (Range<usize>, Range<usize>)> + 'a> {
     return match level {

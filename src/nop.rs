@@ -3,6 +3,7 @@
 use crate::utils::number_encoding::decode32;
 use crate::utils::number_encoding::encode32;
 use crate::utils::signatures::{match_signature, NOP_ENC};
+use crate::Context;
 use crate::{Decoder, Encoder};
 pub struct NopEncoder<'a> {
     /// The uncompressed input.
@@ -12,10 +13,6 @@ pub struct NopEncoder<'a> {
 }
 
 impl<'a> NopEncoder<'a> {
-    pub fn new(input: &'a [u8], output: &'a mut Vec<u8>) -> Self {
-        Self { input, output }
-    }
-
     fn encode_impl(&mut self) -> usize {
         self.output.extend(NOP_ENC);
         encode32(self.input.len() as u32, self.output);
@@ -51,7 +48,7 @@ impl<'a> NopDecoder<'a> {
 }
 
 impl<'a> Encoder<'a> for NopEncoder<'a> {
-    fn new(input: &'a [u8], output: &'a mut Vec<u8>) -> Self {
+    fn new(input: &'a [u8], output: &'a mut Vec<u8>, _ctx: Context) -> Self {
         NopEncoder { input, output }
     }
 
