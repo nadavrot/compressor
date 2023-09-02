@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use crate::lz::matcher::Matcher;
+use super::matcher::select_matcher;
 use crate::{Decoder, Encoder};
 
 /// An LZ4 Encoder.
@@ -93,7 +93,7 @@ impl<'a> LZ4Encoder<'a> {
 
         // Construct a matcher.
         // Rule 2:The last 5 bytes are always literals. Don't try to match them.
-        let matcher = Matcher::<65536, 65536>::new(&self.input[..(len - 5)]);
+        let matcher = select_matcher(4, &self.input[..(len - 5)]);
 
         let mut last_encoded = 0;
         for (lit, mat) in matcher {

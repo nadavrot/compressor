@@ -1,42 +1,54 @@
 //! This module implements a reusable Lempel–Ziv matcher.
-
 use std::ops::Range;
 
-/// Controls the size, and depth of the dictionary.
-const DICTIONARY_SIZE_BITS: usize = 13;
-const DICTIONARY_SIZE: usize = 1 << DICTIONARY_SIZE_BITS;
-/// Controls the number of ways in the cache.
-const DICTIONARY_BANKS: usize = 8;
 /// Used to mark empty cells.
 const EMPTY_CELL: u32 = 0xffffffff;
-
-// Enable a form of non-greedy parsing. This is explained here:
-// http://fastcompression.blogspot.com/2011/12/advanced-parsing-strategies.html
-const ENABLE_OPT_PARSE: bool = true;
-// The number of bytes forward that the program can search. This is a number
-// between 1 and 4.
-const PARSE_MAX_SEARCH: usize = 4;
-
 // The minimum size of the match word.
 const MIN_MATCH: usize = 4;
 
-/// A Lempel–Ziv based matcher.
-struct LzDictionary<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> {
+/// A Lempel–Ziv based matcher. Parameters:
+/// MAX_OFFSET controls the maximum size of match offset.
+/// MAX_MATCH controls the maximum length of matches.
+/// DICT_SIZE_BITS Controls the size of the cache (1<<x).
+/// DICT_BANKS number of ways in the LRU cache.
+/// PARSE_SEARCH controls the look ahead scan of the matcher (1..4).
+struct LzDictionary<
+    'a,
+    const MAX_OFFSET: usize,
+    const MAX_MATCH: usize,
+    const DICT_SIZE_BITS: usize,
+    const DICT_BANKS: usize,
+    const PARSE_SEARCH: usize,
+> {
     /// The input to tokenize.
     input: &'a [u8],
     /// Maps a sequence of bytes to their index in the sequence.
     /// The match could be a hash collision or an uninitialized value.
     /// Matches may reside in one of the rotating LRU banks.
-    dict: Box<[u32; DICTIONARY_SIZE * DICTIONARY_BANKS]>,
+    dict: Vec<u32>,
 }
 
-impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
-    LzDictionary<'a, MAX_OFFSET, MAX_MATCH>
+impl<
+        'a,
+        const MAX_OFFSET: usize,
+        const MAX_MATCH: usize,
+        const DICT_SIZE_BITS: usize,
+        const DICT_BANKS: usize,
+        const PARSE_SEARCH: usize,
+    >
+    LzDictionary<
+        'a,
+        MAX_OFFSET,
+        MAX_MATCH,
+        DICT_SIZE_BITS,
+        DICT_BANKS,
+        PARSE_SEARCH,
+    >
 {
     pub fn new(input: &'a [u8]) -> Self {
         Self {
             input,
-            dict: Box::from([EMPTY_CELL; DICTIONARY_SIZE * DICTIONARY_BANKS]),
+            dict: vec![EMPTY_CELL; (1 << DICT_SIZE_BITS) * DICT_BANKS],
         }
     }
 
@@ -53,7 +65,7 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
 
     fn hash_to_index(val: u32) -> usize {
         let val = val.wrapping_mul(0x797124e5);
-        let val = val >> (32 - DICTIONARY_SIZE_BITS);
+        let val = val >> (32 - DICT_SIZE_BITS);
         val as usize
     }
 
@@ -95,8 +107,8 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
         let dic_idx = self.get_match_candidate(idx);
         let mut best = 0..0;
 
-        for i in 0..DICTIONARY_BANKS {
-            let loc = self.dict[dic_idx * DICTIONARY_BANKS + i];
+        for i in 0..DICT_BANKS {
+            let loc = self.dict[dic_idx * DICT_BANKS + i];
             // Ignore empty cells.
             if loc == EMPTY_CELL {
                 break;
@@ -115,7 +127,7 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
             }
         }
 
-        if best.len() >= 4 {
+        if best.len() >= MIN_MATCH {
             best
         } else {
             0..0
@@ -131,8 +143,8 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
         let dic_idx = self.get_match_candidate(idx);
         // This is an LRU cache. Move the old entries to make room to the new
         // entry.
-        let base = dic_idx * DICTIONARY_BANKS;
-        for i in (0..DICTIONARY_BANKS - 1).rev() {
+        let base = dic_idx * DICT_BANKS;
+        for i in (0..DICT_BANKS - 1).rev() {
             self.dict[base + (i + 1)] = self.dict[base + (i)];
         }
         self.dict[base] = idx as u32;
@@ -166,15 +178,36 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
 }
 
 /// A Lempel–Ziv based matcher.
-pub struct Matcher<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> {
+pub struct Matcher<
+    'a,
+    const MAX_OFFSET: usize,
+    const MAX_MATCH: usize,
+    const DICT_SIZE_BITS: usize,
+    const DICT_BANKS: usize,
+    const PARSE_SEARCH: usize,
+> {
     /// The input to tokenize.
-    dict: LzDictionary<'a, MAX_OFFSET, MAX_MATCH>,
+    dict: LzDictionary<
+        'a,
+        MAX_OFFSET,
+        MAX_MATCH,
+        DICT_SIZE_BITS,
+        DICT_BANKS,
+        PARSE_SEARCH,
+    >,
     /// The iterator location in the input.
     cursor: usize,
 }
 
-impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
-    Matcher<'a, MAX_OFFSET, MAX_MATCH>
+impl<
+        'a,
+        const MAX_OFFSET: usize,
+        const MAX_MATCH: usize,
+        const DICT_SIZE_BITS: usize,
+        const DICT_BANKS: usize,
+        const PARSE_SEARCH: usize,
+    >
+    Matcher<'a, MAX_OFFSET, MAX_MATCH, DICT_SIZE_BITS, DICT_BANKS, PARSE_SEARCH>
 {
     pub fn new(input: &'a [u8]) -> Self {
         Self {
@@ -202,12 +235,14 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
             let mat = self.dict.get_match(self.cursor);
             self.dict.save_match(self.cursor);
 
+            // Enable a form of non-greedy parsing. This is explained here:
+            // http://fastcompression.blogspot.com/2011/12/advanced-parsing-strategies.html
             if !mat.is_empty() {
                 // If we found a match, try to see if one of the next chars is a
                 // better candidate.
                 let end_of_buffer = self.cursor + MIN_MATCH * 2 > input_len;
-                if ENABLE_OPT_PARSE && !end_of_buffer {
-                    for i in 1..PARSE_MAX_SEARCH {
+                if !end_of_buffer {
+                    for i in 1..PARSE_SEARCH {
                         let mat2 = self.dict.get_match(self.cursor + i);
                         if !mat2.is_empty() {
                             // If we skip one char we might find a better match!
@@ -256,13 +291,32 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
 }
 
 /// An optimal Lempel–Ziv based matcher.
-pub struct OptimalMatcher<const MAX_OFFSET: usize, const MAX_MATCH: usize> {
+pub struct OptimalMatcher<
+    const MAX_OFFSET: usize,
+    const MAX_MATCH: usize,
+    const DICT_SIZE_BITS: usize,
+    const DICT_BANKS: usize,
+    const PARSE_SEARCH: usize,
+> {
     matches: Vec<(Range<usize>, Range<usize>)>,
     curr: usize,
 }
 
-impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
-    OptimalMatcher<MAX_OFFSET, MAX_MATCH>
+impl<
+        'a,
+        const MAX_OFFSET: usize,
+        const MAX_MATCH: usize,
+        const DICT_SIZE_BITS: usize,
+        const DICT_BANKS: usize,
+        const PARSE_SEARCH: usize,
+    >
+    OptimalMatcher<
+        MAX_OFFSET,
+        MAX_MATCH,
+        DICT_SIZE_BITS,
+        DICT_BANKS,
+        PARSE_SEARCH,
+    >
 {
     pub fn new(input: &'a [u8]) -> Self {
         Self {
@@ -272,7 +326,13 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
     }
 
     fn get_matches(input: &'a [u8]) -> Vec<(Range<usize>, Range<usize>)> {
-        let mut dict = LzDictionary::<MAX_OFFSET, MAX_MATCH>::new(input);
+        let mut dict = LzDictionary::<
+            MAX_OFFSET,
+            MAX_MATCH,
+            DICT_SIZE_BITS,
+            DICT_BANKS,
+            PARSE_SEARCH,
+        >::new(input);
         let mut all_matches = Vec::new();
         let input_len = dict.len();
 
@@ -350,8 +410,22 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize>
 }
 
 /// Implement the iterator trait for the matcher.
-impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> Iterator
-    for Matcher<'a, MAX_OFFSET, MAX_MATCH>
+impl<
+        'a,
+        const MAX_OFFSET: usize,
+        const MAX_MATCH: usize,
+        const DICT_SIZE_BITS: usize,
+        const DICT_BANKS: usize,
+        const PARSE_SEARCH: usize,
+    > Iterator
+    for Matcher<
+        'a,
+        MAX_OFFSET,
+        MAX_MATCH,
+        DICT_SIZE_BITS,
+        DICT_BANKS,
+        PARSE_SEARCH,
+    >
 {
     type Item = (Range<usize>, Range<usize>);
 
@@ -361,8 +435,20 @@ impl<'a, const MAX_OFFSET: usize, const MAX_MATCH: usize> Iterator
 }
 
 /// Implement the iterator trait for the optimal matcher.
-impl<const MAX_OFFSET: usize, const MAX_MATCH: usize> Iterator
-    for OptimalMatcher<MAX_OFFSET, MAX_MATCH>
+impl<
+        const MAX_OFFSET: usize,
+        const MAX_MATCH: usize,
+        const DICT_SIZE_BITS: usize,
+        const DICT_BANKS: usize,
+        const PARSE_SEARCH: usize,
+    > Iterator
+    for OptimalMatcher<
+        MAX_OFFSET,
+        MAX_MATCH,
+        DICT_SIZE_BITS,
+        DICT_BANKS,
+        PARSE_SEARCH,
+    >
 {
     type Item = (Range<usize>, Range<usize>);
 
@@ -382,11 +468,16 @@ pub fn select_matcher<'a>(
     level: usize,
     input: &'a [u8],
 ) -> Box<dyn Iterator<Item = (Range<usize>, Range<usize>)> + 'a> {
-    if level > 5 {
-        let mat = OptimalMatcher::<65536, 65536>::new(input);
-        return Box::new(mat);
-    }
-
-    let mat = Matcher::<'a, 65536, 65536>::new(input);
-    Box::new(mat)
+    return match level {
+        1 => Box::new(Matcher::<'a, 65536, 65536, 17, 4, 1>::new(input)),
+        2 => Box::new(Matcher::<'a, 65536, 65536, 17, 8, 1>::new(input)),
+        3 => Box::new(Matcher::<'a, 65536, 65536, 17, 8, 2>::new(input)),
+        4 => Box::new(Matcher::<'a, 65536, 65536, 18, 16, 2>::new(input)),
+        5 => Box::new(Matcher::<'a, 65536, 65536, 18, 16, 2>::new(input)),
+        6 => Box::new(Matcher::<'a, 65536, 65536, 19, 32, 4>::new(input)),
+        7 => Box::new(Matcher::<'a, 65536, 65536, 19, 64, 4>::new(input)),
+        8 => Box::new(OptimalMatcher::<65536, 65536, 19, 64, 4>::new(input)),
+        9 => Box::new(OptimalMatcher::<65536, 65536, 19, 64, 4>::new(input)),
+        _ => panic!(),
+    };
 }

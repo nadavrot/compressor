@@ -7,7 +7,7 @@ fn test_matcher() {
         1,
     ];
 
-    let mut matcher = Matcher::<1024, 256>::new(&input);
+    let mut matcher = Matcher::<1024, 256, 4, 4, 1>::new(&input);
     let (lit0, mat0) = matcher.next().unwrap();
     let (lit1, mat1) = matcher.next().unwrap();
     assert!(matcher.next().is_none());
