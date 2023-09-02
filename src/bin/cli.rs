@@ -51,6 +51,8 @@ fn handle_buffers(
     input: &[u8],
     output: &mut Vec<u8>,
 ) -> Option<(usize, usize)> {
+    let x = Timer::new();
+
     if is_compress {
         if is_full {
             log::info!("Compressing using the Full compressor");
@@ -80,7 +82,7 @@ fn handle_buffers(
         let stat = decoder.decode();
         return stat;
     }
-
+    drop(x);
     None
 }
 
@@ -169,7 +171,6 @@ fn main() {
     let mode = cli_mode == "full";
     let out = &cli_output_path.unwrap();
     let mut dest = Vec::new();
-    let x = Timer::new();
 
     if cli_compress {
         if let Some((from, to)) = handle_buffers(true, mode, &input, &mut dest)
@@ -211,6 +212,4 @@ fn main() {
     } else {
         log::info!("Decompression failed");
     }
-
-    drop(x);
 }
