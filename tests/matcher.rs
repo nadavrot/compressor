@@ -1,4 +1,4 @@
-use compressor::lz::matcher::Matcher;
+use compressor::lz::matcher::{Matcher, OptimalMatcher};
 
 #[test]
 fn test_matcher() {
@@ -19,4 +19,36 @@ fn test_matcher() {
     assert_eq!(lit1.len(), 9);
     assert_eq!(mat1.start, 0);
     assert_eq!(mat1.len(), 0);
+}
+
+#[test]
+fn test_optimal_sequence() {
+    let input = [
+        67, 67, 65, 66, 67, 66, 66, 66, 66, 67, 67, 67, 66, 66, 66, 67, 67, 67,
+        66, 66, 66, 67, 66, 66, 67,
+    ];
+
+    // This sequence:
+    // CCABCBBBBCCCBBBCCCBBBCBBC
+
+    // Can be matched as:
+    // CCABCBBBBCC CBBB CCCBBBCBBC
+    // or:
+    // CCABCBBBBCCC BBBCCCBBBC BBC
+
+    let mut mat = Matcher::<65536, 65536, 19, 64, 4>::new(&input);
+    let g1 = mat.next().unwrap();
+    let g2 = mat.next().unwrap();
+    // (0..12, 6..16)
+    // (22..25, 0..0)
+    assert_eq!(g1.1.len(), 10);
+    assert_eq!(g2.1.len(), 0);
+
+    let mut mat = OptimalMatcher::<65536, 65536, 19, 64>::new(&input);
+    let g1 = mat.next().unwrap();
+    let g2 = mat.next().unwrap();
+    // (0..12, 6..16)
+    // (22..25, 0..0)
+    assert_eq!(g1.1.len(), 10);
+    assert_eq!(g2.1.len(), 0);
 }
