@@ -235,17 +235,19 @@ impl<
             let mat = self.dict.get_match(self.cursor);
             self.dict.save_match(self.cursor);
 
-            // Enable a form of non-greedy parsing. This is explained here:
-            // http://fastcompression.blogspot.com/2011/12/advanced-parsing-strategies.html
             if !mat.is_empty() {
                 // If we found a match, try to see if one of the next chars is a
                 // better candidate.
                 let end_of_buffer = self.cursor + MIN_MATCH * 2 > input_len;
                 if !end_of_buffer {
+                    // Enable a form of non-greedy parsing. Explanation:
+                    // http://fastcompression.blogspot.com/2011/12/advanced-parsing-strategies.html
                     for i in 1..PARSE_SEARCH {
                         let mat2 = self.dict.get_match(self.cursor + i);
                         if !mat2.is_empty() {
-                            // If we skip one char we might find a better match!
+                            // Check if by skipping 'i' characters we get a
+                            // better match. If we do, construct literals and
+                            // jump forward.
                             if mat2.len() >= mat.len() + i {
                                 self.cursor += i;
                                 lit = lit.start..lit.end + i;
@@ -341,9 +343,9 @@ impl<
             return vec![(lit, 0..0)];
         }
 
+        // First, collect all of the matches for all of the input.
         for cursor in 0..input_len - MIN_MATCH {
             // Check if there is a previous match, and save the hash.
-
             let mat = dict.get_match(cursor);
             dict.save_match(cursor);
             all_matches.push(mat);
@@ -356,6 +358,9 @@ impl<
 
         let mut distance_to_end: Vec<usize> = vec![usize::MAX; input_len + 1];
 
+        // Next, figure out which matches are profitable and at what length.
+        // This part of the code deletes unprofitable matches and shortens the
+        // remaining matches.
         let match_cost = 3;
         distance_to_end[input_len] = 0;
         for i in (0..input_len).rev() {
@@ -386,9 +391,9 @@ impl<
             distance_to_end[i] = lowest;
         }
 
+        // Finally, construct the list of selected matches and literal ranges.
         let mut lit = 0..0;
         let mut curr = 0;
-
         let mut selected_matches = Vec::new();
 
         while curr < input_len {
