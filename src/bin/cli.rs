@@ -14,6 +14,8 @@ use compressor::{Context, Decoder, Encoder};
 use std::{fs, time::Instant};
 use std::{fs::File, io::Write};
 
+const DEFAULT_COMPRESSION_LEVEL: u8 = 5;
+
 fn save_file(data: &[u8], path: &str) {
     let mut f = File::create(path).expect("Can't create file");
     f.write_all(data).expect("Unable to write data");
@@ -45,25 +47,30 @@ impl Drop for Timer {
     }
 }
 
-fn handle_buffers(
+fn operate(
     is_compress: bool,
     is_full: bool,
     input: &[u8],
     output: &mut Vec<u8>,
+    ctx: Context,
 ) -> Option<(usize, usize)> {
     let x = Timer::new();
 
-    let ctx = Context::new(9, 1 << 20);
-
     if is_compress {
         if is_full {
-            log::info!("Compressing using the Full compressor");
+            log::info!(
+                "Compressing using the Full compressor at level {}",
+                ctx.level
+            );
             let mut encoder = FullEncoder::new(input, output, ctx);
             let written = encoder.encode();
             return Some((input.len(), written));
         }
 
-        log::info!("Compressing using the LZ4 compressor");
+        log::info!(
+            "Compressing using the LZ4 compressor at level {}",
+            ctx.level
+        );
         output.extend(LZ4_SIG);
         let mut encoder = LZ4Encoder::new(input, output, ctx);
         let written = encoder.encode();
@@ -130,6 +137,14 @@ fn main() {
                 .num_args(1),
         )
         .arg(
+            Arg::new("level")
+                .short('l')
+                .long("level")
+                .value_name("level")
+                .help("Selects the compression level.")
+                .num_args(1),
+        )
+        .arg(
             Arg::new("INPUT")
                 .help("Sets the input file to use")
                 .required(true)
@@ -141,7 +156,12 @@ fn main() {
 
     let mut cli_compress = matches.get_flag("compress");
     let cli_decompress = matches.get_flag("decompress");
-    let cli_checked_mode = matches.get_flag("checked");
+    let cli_checked = matches.get_flag("checked");
+    let cli_level: u8 = if let Some(val) = matches.get_one::<String>("level") {
+        val.parse::<u8>().unwrap_or(DEFAULT_COMPRESSION_LEVEL)
+    } else {
+        DEFAULT_COMPRESSION_LEVEL
+    };
     let mut cli_output_path = matches.get_one::<String>("output").cloned();
     let cli_mode = matches
         .get_one::<String>("mode")
@@ -157,6 +177,8 @@ fn main() {
     if !cli_compress && !cli_decompress && !ends_with_ext {
         cli_compress = true;
     }
+
+    let ctx = Context::new(cli_level, 1 << 20);
 
     // Come up with a file name.
     if cli_output_path.is_none() {
@@ -175,8 +197,7 @@ fn main() {
     let mut dest = Vec::new();
 
     if cli_compress {
-        if let Some((from, to)) = handle_buffers(true, mode, &input, &mut dest)
-        {
+        if let Some((from, to)) = operate(true, mode, &input, &mut dest, ctx) {
             log::info!("Compressed from {} to {} bytes.", from, to);
             log::info!("Compression ratio is {:.4}x.", from as f64 / to as f64);
             save_file(&dest, out);
@@ -185,11 +206,11 @@ fn main() {
             return;
         }
 
-        if cli_checked_mode {
+        if cli_checked {
             let mut decoded = Vec::new();
 
             if let Some((from, to)) =
-                handle_buffers(false, mode, &dest, &mut decoded)
+                operate(false, mode, &dest, &mut decoded, ctx)
             {
                 log::info!("Decompressed from {} to {} bytes.", from, to);
                 if input == decoded {
@@ -208,7 +229,7 @@ fn main() {
         return;
     }
 
-    if let Some((from, to)) = handle_buffers(false, mode, &input, &mut dest) {
+    if let Some((from, to)) = operate(false, mode, &input, &mut dest, ctx) {
         log::info!("Decompressed from {} to {} bytes.", from, to);
         save_file(&dest, out);
     } else {

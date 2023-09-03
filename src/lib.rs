@@ -11,9 +11,9 @@ pub mod utils;
 #[derive(Copy, Clone)]
 pub struct Context {
     /// Specifies the compression level.
-    level: u8,
+    pub level: u8,
     /// Specifies the size of each block.
-    block_size: usize,
+    pub block_size: usize,
 }
 
 impl Context {

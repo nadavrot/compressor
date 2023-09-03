@@ -59,7 +59,7 @@ pub struct BlockEncoder<'a> {
 
 impl<'a> BlockEncoder<'a> {
     fn encode_buffer(input: &'a [u8], ctx: Context) -> Vec<u8> {
-        let matcher = select_matcher(1, input);
+        let matcher = select_matcher(ctx.level, input);
 
         let mut lits: Vec<u8> = Vec::new();
         let mut lit_lens: Vec<u32> = Vec::new();
