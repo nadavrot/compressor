@@ -444,15 +444,15 @@ pub fn select_matcher<'a>(
     input: &'a [u8],
 ) -> Box<dyn Iterator<Item = (Range<usize>, Range<usize>)> + 'a> {
     return match level {
-        1 => Box::new(Matcher::<'a, 65536, 65536, 17, 4, 1>::new(input)),
+        1 => Box::new(Matcher::<'a, 65536, 65536, 17, 2, 1>::new(input)),
         2 => Box::new(Matcher::<'a, 65536, 65536, 17, 8, 1>::new(input)),
         3 => Box::new(Matcher::<'a, 65536, 65536, 17, 8, 2>::new(input)),
         4 => Box::new(Matcher::<'a, 65536, 65536, 18, 16, 2>::new(input)),
-        5 => Box::new(Matcher::<'a, 65536, 65536, 18, 16, 2>::new(input)),
+        5 => Box::new(Matcher::<'a, 65536, 65536, 18, 32, 2>::new(input)),
         6 => Box::new(Matcher::<'a, 65536, 65536, 19, 32, 4>::new(input)),
-        7 => Box::new(Matcher::<'a, 65536, 65536, 19, 64, 4>::new(input)),
-        8 => Box::new(OptimalMatcher::<65536, 65536, 19, 64>::new(input)),
-        9 => Box::new(OptimalMatcher::<65536, 65536, 19, 64>::new(input)),
+        7 => Box::new(Matcher::<'a, 65536, 65536, 20, 64, 4>::new(input)),
+        8 => Box::new(OptimalMatcher::<65536, 65536, 20, 64>::new(input)),
+        9 => Box::new(OptimalMatcher::<65536, 65536, 20, 128>::new(input)),
         _ => panic!(),
     };
 }
