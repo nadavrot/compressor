@@ -164,10 +164,8 @@ impl Bitvector {
         let len = input.len();
         let available_u64s = len / 8;
 
-        // Check that we don't create malformed vectors.
-        // 1. We are sending complete 64bit words.
-        // 2. The vector words need to be backed by data that's read.
-        if len % 8 != 0 || length_field >= (1 + available_u64s) * 64 {
+        // Check that we have enough data in the buffer to fill the bitvector.
+        if length_field >= (1 + available_u64s) * 64 {
             return None;
         }
 
