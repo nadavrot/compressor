@@ -17,8 +17,8 @@ use crate::utils::variable_length_encoding::encode_array32 as encode_vl32;
 
 use crate::{Context, Decoder, Encoder};
 
-type EncoderTy<'a> = SimpleEncoder<'a, 256, 4096>;
-type DecoderTy<'a> = SimpleDecoder<'a, 256, 4096>;
+/// This is the maximum number of length bits that we allow for offsets. (1<<X)
+const MAX_OFFSET_BITS: usize = 24;
 
 /// Encode a list of offsets, with a histogram that favors short indices, into
 /// two streams: tokens and extra bits. The tokens are compressed with fse, and
@@ -34,7 +34,7 @@ pub fn encode_offset_stream(input: &[u32], ctx: Context) -> Vec<u8> {
         tokens.push(two_stream_encoding::encode32(*val, &mut bv) as u8);
     }
     // Entropy encode the tokens.
-    type EncoderTy<'a> = SimpleEncoder<'a, 24, 4096>;
+    type EncoderTy<'a> = SimpleEncoder<'a, MAX_OFFSET_BITS, 4096>;
     let _ = EncoderTy::new(&tokens, &mut encoded, ctx).encode();
     // Append the bitstream after the tokens.
     let _ = bv.serialize(&mut encoded);
@@ -44,7 +44,7 @@ pub fn encode_offset_stream(input: &[u32], ctx: Context) -> Vec<u8> {
 /// Decode the list of offsets that were encoded with 'encode_offset_stream'.
 pub fn decode_offset_stream(input: &[u8]) -> Option<Vec<u32>> {
     let mut tokens: Vec<u8> = Vec::new();
-    type DecoderTy<'a> = SimpleDecoder<'a, 24, 4096>;
+    type DecoderTy<'a> = SimpleDecoder<'a, MAX_OFFSET_BITS, 4096>;
     let (read, _) = DecoderTy::new(input, &mut tokens).decode()?;
     let (mut bv, bv_read) = Bitvector::deserialize(&input[read..])?;
     // Check that all of the data was read.
@@ -66,6 +66,7 @@ pub fn decode_offset_stream(input: &[u8]) -> Option<Vec<u32>> {
 //. Try to perform entropy encoding, but if it fails use nop encoding.
 fn encode_entropy(input: &[u8], ctx: Context) -> Vec<u8> {
     let mut encoded: Vec<u8> = Vec::new();
+    type EncoderTy<'a> = SimpleEncoder<'a, 256, 4096>;
     let new_size = EncoderTy::new(input, &mut encoded, ctx).encode();
 
     if new_size < input.len() {
@@ -80,6 +81,7 @@ fn encode_entropy(input: &[u8], ctx: Context) -> Vec<u8> {
 fn decode_entropy(input: &[u8]) -> Option<Vec<u8>> {
     let mut decoded: Vec<u8> = Vec::new();
 
+    type DecoderTy<'a> = SimpleDecoder<'a, 256, 4096>;
     if DecoderTy::new(input, &mut decoded).decode().is_some() {
         return Some(decoded);
     }

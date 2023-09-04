@@ -1,4 +1,5 @@
-use compressor::block::{BlockDecoder, BlockEncoder, encode_offset_stream, decode_offset_stream};
+use compressor::block::{decode_offset_stream, encode_offset_stream};
+use compressor::block::{BlockDecoder, BlockEncoder};
 use compressor::full::{FullDecoder, FullEncoder};
 use compressor::pager::{PagerDecoder, PagerEncoder};
 use compressor::{Context, Decoder, Encoder};
