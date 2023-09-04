@@ -54,7 +54,7 @@ impl Bitvector {
             self.len += len;
 
             // If the free word is filled, flush it.
-            if self.len % 64 == 0 {
+            if self.len % 64 == 0 && len > 0 {
                 self.data.push(self.last);
                 self.last = 0;
             }

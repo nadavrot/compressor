@@ -4,6 +4,7 @@ use compressor::bitvector::Bitvector;
 fn test_ser_des() {
     for num_bits in 1..120 {
         let mut bv = Bitvector::new();
+        let _ = bv.pop_word(0);
         // Generate some data.
         for i in 0..num_bits {
             bv.push_word(i ^ num_bits, 7);
