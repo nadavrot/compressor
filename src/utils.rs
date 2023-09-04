@@ -265,3 +265,117 @@ pub mod array_encoding {
         Some(4 + len)
     }
 }
+
+/// Encodes numbers into two streams: tokens and extra bits. This is useful when
+/// there is a sharp distribution of values, with few high-bit numbers.
+/// The first stream stores state values in the range 0..N, and the second
+/// stream stores the extra bits. The representation of the value is
+/// (1 << code) + read_bits(code). The numbers are shifted by +1, to allow the
+/// encoding of zero. This encoder encodes the range [0 .. u32::MAX-1].
+/// Reference:
+/// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#offset-codes
+pub mod two_stream_encoding {
+    use super::number_encoding;
+    use crate::bitvector::Bitvector;
+
+    /// Encode 'val' into a token, and stores the extra bits into 'bv'.
+    pub fn encode32(val: u32, bv: &mut Bitvector) -> u32 {
+        let code = 32 - (val + 1).leading_zeros() - 1;
+        bv.push_word((val + 1) as u64, code as usize);
+        code
+    }
+
+    /// Decode a value from the token, and extracts the extra bits from 'bv'.
+    pub fn decode32(code: u32, bv: &mut Bitvector) -> u32 {
+        (1 << code) + bv.pop_word(code as usize) as u32 - 1
+    }
+
+    #[test]
+    fn test_two_stream_encoding_simple() {
+        let mut bv = Bitvector::new();
+        let val = 7;
+        let tok = encode32(val, &mut bv);
+        let res = decode32(tok, &mut bv);
+        assert_eq!(bv.len(), 0);
+        assert_eq!(val, res);
+    }
+
+    #[test]
+    fn test_two_stream_encoding_many() {
+        for i in 0..130 {
+            let mut bv = Bitvector::new();
+            let tok = encode32(i, &mut bv);
+            let res = decode32(tok, &mut bv);
+            assert_eq!(bv.len(), 0);
+            assert_eq!(i, res);
+            assert!(tok < 8);
+        }
+    }
+
+    #[test]
+    fn test_two_stream_encoding_tokens() {
+        let mut bv = Bitvector::new();
+        let vals = [
+            0, 1, 2, 3, 5, 16, 37, 1121, 3512, 17824, 69481, 32768, 41910,
+            65535, 65536, 65537, 192151,
+        ];
+        for val in vals {
+            let tok = encode32(val, &mut bv);
+            let res = decode32(tok, &mut bv);
+            assert_eq!(bv.len(), 0);
+            assert_eq!(val, res);
+        }
+    }
+
+    /// Encode the array and return the number of bytes written to the stream.
+    pub fn encode_array32(
+        array: &[u32],
+        stream: &mut Vec<u8>,
+        bv: &mut Bitvector,
+    ) -> usize {
+        let written = number_encoding::encode32(array.len() as u32, stream);
+        for val in array {
+            stream.push(encode32(*val, bv) as u8);
+        }
+        written + array.len()
+    }
+
+    /// Decode the array and return the number of items that were read.
+    pub fn decode_array32(
+        stream: &[u8],
+        array: &mut Vec<u32>,
+        bv: &mut Bitvector,
+    ) -> Option<usize> {
+        // We need to process the values in reverse, because the bits are
+        // stored in the bitvector in reverse.
+        let mut res = Vec::new();
+        let (read, len) = number_encoding::decode32(stream)?;
+        let len = len as usize;
+        for i in 0..len {
+            res.push(decode32(stream[read + (len - i - 1)] as u32, bv));
+        }
+        res.reverse();
+        array.extend(res);
+        Some(read + len)
+    }
+
+    #[test]
+    fn test_two_stream_encoding_array() {
+        let vals = [
+            16, 37, 1121, 3512, 17824, 69481, 32768, 41910, 65535, 65536,
+            65537, 192151,
+        ];
+
+        let mut encoded = Vec::new();
+        let mut decoded = Vec::new();
+
+        let mut bv = Bitvector::new();
+        let written = encode_array32(&vals, &mut encoded, &mut bv);
+        let read = decode_array32(&encoded, &mut decoded, &mut bv).unwrap();
+
+        assert_eq!(written, encoded.len());
+        assert_eq!(read, encoded.len());
+        assert_eq!(bv.len(), 0);
+        assert_eq!(vals.to_vec(), decoded);
+    }
+}
