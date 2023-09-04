@@ -1,4 +1,4 @@
-use compressor::block::{BlockDecoder, BlockEncoder};
+use compressor::block::{BlockDecoder, BlockEncoder, encode_offset_stream, decode_offset_stream};
 use compressor::full::{FullDecoder, FullEncoder};
 use compressor::pager::{PagerDecoder, PagerEncoder};
 use compressor::{Context, Decoder, Encoder};
@@ -156,4 +156,13 @@ fn test_pager_round_trip() {
         }
         round_trip(&vec);
     }
+}
+
+#[test]
+fn test_offset_encoder() {
+    let input = [0, 1, 2, 3, 12, 65233, 11241];
+    let ctx = Context::new(5, 120);
+    let res = encode_offset_stream(&input, ctx);
+    let out = decode_offset_stream(&res).unwrap();
+    assert_eq!(out, input);
 }
