@@ -11,9 +11,10 @@ fn test_ser_des() {
 
         // Serialize, deserialize and compare the results.
         let mut output = Vec::new();
-        bv.serialize(&mut output);
-        let bv2 = Bitvector::deserialize(&output).unwrap().0;
+        let wrote = bv.serialize(&mut output);
+        let (bv2, read) = Bitvector::deserialize(&output).unwrap();
         assert_eq!(bv, bv2);
+        assert_eq!(read, wrote);
     }
 }
 
