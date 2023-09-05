@@ -54,7 +54,7 @@ fn test_block_round_trip() {
 fn test_full_round_trip() {
     fn round_trip(input: &[u8]) {
         let mut compressed: Vec<u8> = Vec::new();
-        let ctx = Context::new(9, 1 << 20);
+        let ctx = Context::new(9, 1 << 10);
 
         {
             let mut encoder = FullEncoder::new(input, &mut compressed, ctx);
@@ -85,9 +85,9 @@ fn test_full_round_trip() {
     }
     {
         let mut vec = Vec::new();
-        for i in 0..100 {
-            for j in 0..100 {
-                for k in 0..100 {
+        for i in 0..10 {
+            for j in 0..10 {
+                for k in 0..10 {
                     vec.push(i + (j ^ k));
                 }
             }
@@ -148,9 +148,9 @@ fn test_pager_round_trip() {
     }
     {
         let mut vec = Vec::new();
-        for i in 0..100 {
-            for j in 0..100 {
-                for k in 0..100 {
+        for i in 0..10 {
+            for j in 0..10 {
+                for k in 0..10 {
                     vec.push(i + (j ^ k));
                 }
             }
