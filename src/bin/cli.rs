@@ -14,7 +14,7 @@ use compressor::{Context, Decoder, Encoder};
 use std::{fs, time::Instant};
 use std::{fs::File, io::Write};
 
-const DEFAULT_COMPRESSION_LEVEL: u8 = 5;
+const DEFAULT_COMPRESSION_LEVEL: u8 = 4;
 
 fn save_file(data: &[u8], path: &str) {
     let mut f = File::create(path).expect("Can't create file");

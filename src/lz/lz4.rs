@@ -95,7 +95,13 @@ impl<'a> LZ4Encoder<'a> {
 
         // Construct a matcher.
         // Rule 2:The last 5 bytes are always literals. Don't try to match them.
-        let matcher = select_matcher(self.ctx.level, &self.input[..(len - 5)]);
+        // Select a matcher based on the optimization level. Limit the match
+        // length and offset for the properties of the format (we can't encode
+        // beyond 16-bit offsets).
+        let matcher = select_matcher::<65536, 65536>(
+            self.ctx.level,
+            &self.input[..(len - 5)],
+        );
 
         let mut last_encoded = 0;
         for (lit, mat) in matcher {

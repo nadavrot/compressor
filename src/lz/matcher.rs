@@ -438,25 +438,22 @@ impl<
 
 /// Select the LZ matcher and matcher parameters based on the compression
 /// 'level'.
+/// 'MAX_LEN' and 'MAX_OFFSET' specify the maximum length and offset of matches.
 /// Returns an iterator that iterates over the matches.
-pub fn select_matcher<'a>(
+pub fn select_matcher<'a, const MAX_OFF: usize, const MAX_LEN: usize>(
     level: u8,
     input: &'a [u8],
 ) -> Box<dyn Iterator<Item = (Range<usize>, Range<usize>)> + 'a> {
-    // This is the maximum allowed offset length. This needs to be in sync with
-    // the block compressor that encodes a certain number of bits.
-    const MAX_OFFSET: usize = 16777216;
-
     return match level {
-        1 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 17, 2, 1>::new(input)),
-        2 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 17, 8, 1>::new(input)),
-        3 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 17, 8, 2>::new(input)),
-        4 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 18, 16, 2>::new(input)),
-        5 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 18, 32, 2>::new(input)),
-        6 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 19, 32, 4>::new(input)),
-        7 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 20, 64, 4>::new(input)),
-        8 => Box::new(OptimalMatcher::<MAX_OFFSET, 65536, 20, 64>::new(input)),
-        9 => Box::new(OptimalMatcher::<MAX_OFFSET, 65536, 20, 128>::new(input)),
+        1 => Box::new(Matcher::<'a, MAX_OFF, MAX_LEN, 17, 2, 1>::new(input)),
+        2 => Box::new(Matcher::<'a, MAX_OFF, MAX_LEN, 17, 8, 1>::new(input)),
+        3 => Box::new(Matcher::<'a, MAX_OFF, MAX_LEN, 17, 8, 2>::new(input)),
+        4 => Box::new(Matcher::<'a, MAX_OFF, MAX_LEN, 18, 16, 2>::new(input)),
+        5 => Box::new(Matcher::<'a, MAX_OFF, MAX_LEN, 18, 32, 2>::new(input)),
+        6 => Box::new(Matcher::<'a, MAX_OFF, MAX_LEN, 19, 32, 4>::new(input)),
+        7 => Box::new(Matcher::<'a, MAX_OFF, MAX_LEN, 20, 64, 4>::new(input)),
+        8 => Box::new(OptimalMatcher::<MAX_OFF, MAX_LEN, 20, 64>::new(input)),
+        9 => Box::new(OptimalMatcher::<MAX_OFF, MAX_LEN, 20, 128>::new(input)),
         _ => panic!(),
     };
 }

@@ -12,14 +12,14 @@ fn get_large_array(items: usize) -> Vec<u8> {
 
 fn match_large_buffer() {
     let input = get_large_array(1_000_000);
-    let matcher = select_matcher(4, &input);
+    let matcher = select_matcher::<65536, 65536>(4, &input);
     let cnt = matcher.count();
     black_box(cnt);
 }
 
 fn match_small_buffer() {
     let input = get_large_array(1_000);
-    let matcher = select_matcher(4, &input);
+    let matcher = select_matcher::<1024, 1024>(4, &input);
     let cnt = matcher.count();
     black_box(cnt);
 }
