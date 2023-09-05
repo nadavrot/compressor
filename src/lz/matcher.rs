@@ -443,16 +443,20 @@ pub fn select_matcher<'a>(
     level: u8,
     input: &'a [u8],
 ) -> Box<dyn Iterator<Item = (Range<usize>, Range<usize>)> + 'a> {
+    // This is the maximum allowed offset length. This needs to be in sync with
+    // the block compressor that encodes a certain number of bits.
+    const MAX_OFFSET: usize = 16777216;
+
     return match level {
-        1 => Box::new(Matcher::<'a, 65536, 65536, 17, 2, 1>::new(input)),
-        2 => Box::new(Matcher::<'a, 65536, 65536, 17, 8, 1>::new(input)),
-        3 => Box::new(Matcher::<'a, 65536, 65536, 17, 8, 2>::new(input)),
-        4 => Box::new(Matcher::<'a, 65536, 65536, 18, 16, 2>::new(input)),
-        5 => Box::new(Matcher::<'a, 65536, 65536, 18, 32, 2>::new(input)),
-        6 => Box::new(Matcher::<'a, 65536, 65536, 19, 32, 4>::new(input)),
-        7 => Box::new(Matcher::<'a, 65536, 65536, 20, 64, 4>::new(input)),
-        8 => Box::new(OptimalMatcher::<65536, 65536, 20, 64>::new(input)),
-        9 => Box::new(OptimalMatcher::<65536, 65536, 20, 128>::new(input)),
+        1 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 17, 2, 1>::new(input)),
+        2 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 17, 8, 1>::new(input)),
+        3 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 17, 8, 2>::new(input)),
+        4 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 18, 16, 2>::new(input)),
+        5 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 18, 32, 2>::new(input)),
+        6 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 19, 32, 4>::new(input)),
+        7 => Box::new(Matcher::<'a, MAX_OFFSET, 65536, 20, 64, 4>::new(input)),
+        8 => Box::new(OptimalMatcher::<MAX_OFFSET, 65536, 20, 64>::new(input)),
+        9 => Box::new(OptimalMatcher::<MAX_OFFSET, 65536, 20, 128>::new(input)),
         _ => panic!(),
     };
 }
