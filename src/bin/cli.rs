@@ -178,7 +178,7 @@ fn main() {
         cli_compress = true;
     }
 
-    let ctx = Context::new(cli_level, 1 << 20);
+    let ctx = Context::new(cli_level, 1 << 31);
 
     // Come up with a file name.
     if cli_output_path.is_none() {
