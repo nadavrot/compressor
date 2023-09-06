@@ -123,10 +123,8 @@ impl<'a> BlockEncoder<'a> {
             // Serialize the matches. Calculate the normalized offset, and
             // encode the length and offset.
             let mut match_offset = lit.end - mat.start;
-            // Split the offsets to a high and low parts.
-
             // Encode consecutive offsets as zeros.
-            if prev_match == match_offset {
+            if prev_match == match_offset || mat.is_empty() {
                 match_offset = 0;
             } else {
                 prev_match = match_offset;
