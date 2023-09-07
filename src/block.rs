@@ -125,12 +125,18 @@ impl<'a> BlockEncoder<'a> {
             lits.extend(literals);
             lit_lens.push(lit.len() as u32);
 
-            // Calculate the offset to the match. Add a bias of 3 to allow
-            // us to encode previous matches.
-            let mut match_offset = lit.end - mat.start + 3;
+            // Calculate the offset to the match.
+            let mut match_offset = lit.end - mat.start;
+
+            // Don't encode empty matches. These show up at stream ends.
+            if mat.is_empty() {
+                match_offset = 0;
+            }
+            // Add a bias of 3 to allow us to encode previous matches.
+            match_offset += 3;
 
             // Check if we are encoding one of the previous matches.
-            if prev_off1 == match_offset || mat.is_empty() {
+            if prev_off1 == match_offset {
                 match_offset = 0;
             } else if prev_off2 == match_offset {
                 match_offset = 1;
@@ -224,12 +230,12 @@ impl<'a> BlockDecoder<'a> {
                 0 => prev_off1,
                 1 => prev_off2,
                 2 => prev_off3,
-                _ => offset - 3,
+                _ => offset,
             };
             prev_off3 = prev_off2;
             prev_off2 = prev_off1;
-            prev_off1 = offset - 3;
-            mat_offs3.push(off);
+            prev_off1 = offset;
+            mat_offs3.push(off - 3);
         }
 
         let _ = decode_vl32(&lit_lens2, &mut lit_lens3)?;
