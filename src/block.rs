@@ -106,30 +106,43 @@ pub struct BlockEncoder<'a> {
 
 impl<'a> BlockEncoder<'a> {
     fn encode_buffer(input: &'a [u8], ctx: Context) -> Vec<u8> {
-        let matcher = select_matcher::<16777216, 65536>(ctx.level, input);
+        // The max offset is 1 << MAX_OFFSET_BITS - 3 to allow the special
+        // encoding of offsets.
+        let matcher = select_matcher::<16777210, 65536>(ctx.level, input);
 
         let mut lits: Vec<u8> = Vec::new();
         let mut lit_lens: Vec<u32> = Vec::new();
         let mut mat_offsets: Vec<u32> = Vec::new();
         let mut mat_lens: Vec<u32> = Vec::new();
 
-        let mut prev_match = 0;
+        let mut prev_off1 = 0;
+        let mut prev_off2 = 0;
+        let mut prev_off3 = 0;
+
         for (lit, mat) in matcher {
             // Serialize the literals and the length of each segment.
             let literals = &input[lit.clone()];
             lits.extend(literals);
             lit_lens.push(lit.len() as u32);
 
-            // Serialize the matches. Calculate the normalized offset, and
-            // encode the length and offset.
-            let mut match_offset = lit.end - mat.start;
-            // Encode consecutive offsets as zeros.
-            if prev_match == match_offset || mat.is_empty() {
+            // Calculate the offset to the match. Add a bias of 3 to allow
+            // us to encode previous matches.
+            let mut match_offset = lit.end - mat.start + 3;
+
+            // Check if we are encoding one of the previous matches.
+            if prev_off1 == match_offset || mat.is_empty() {
                 match_offset = 0;
-            } else {
-                prev_match = match_offset;
+            } else if prev_off2 == match_offset {
+                match_offset = 1;
+            } else if prev_off3 == match_offset {
+                match_offset = 2;
             }
 
+            prev_off3 = prev_off2;
+            prev_off2 = prev_off1;
+            prev_off1 = match_offset;
+
+            // Store the match length and offsets.
             mat_offsets.push(match_offset as u32);
             mat_lens.push(mat.len() as u32);
         }
@@ -201,14 +214,22 @@ impl<'a> BlockDecoder<'a> {
 
         // Decode the offsets. Zero means that we need to use the previous
         // offset.
-        let mut prev_offset = 0;
-        for mut offset in mat_offs2 {
-            if offset == 0 {
-                offset = prev_offset;
-            } else {
-                prev_offset = offset;
-            }
-            mat_offs3.push(offset);
+        let mut prev_off1 = 0;
+        let mut prev_off2 = 0;
+        let mut prev_off3 = 0;
+
+        // Decode the offset (the first 3 values refer to previous offsets).
+        for offset in mat_offs2 {
+            let off = match offset {
+                0 => prev_off1,
+                1 => prev_off2,
+                2 => prev_off3,
+                _ => offset - 3,
+            };
+            prev_off3 = prev_off2;
+            prev_off2 = prev_off1;
+            prev_off1 = offset - 3;
+            mat_offs3.push(off);
         }
 
         let _ = decode_vl32(&lit_lens2, &mut lit_lens3)?;
