@@ -65,10 +65,10 @@ the time in the entropy coding phase.
 
 ![Time breakdown](docs/prof.png)
 
-This chart shows the breakdown of bytes inside the binary. The green slices are
-the literals and literal lengths, and the gray slices show the upper and lower
-parts of offsets, and the length of the offsets. All of the slices are listed
-after entropy encoding, as they lay in the file.
+This chart shows the size breakdown inside the binary. The green slices are the
+literals and literal lengths, and the gray slices show the offsets, and the
+length of the offsets. All of the slices are listed after entropy encoding, as
+they lay in the file.
 ![size breakdown](docs/sizebreakdown.svg)
 
 The charts below show the match length and offset distributions. The match
