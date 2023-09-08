@@ -4,7 +4,7 @@
 pub mod signatures {
     /// Signatures for different encoding kinds.
     pub const LZ4_SIG: [u8; 4] = [0x17, 0x41, 0x74, 0x17];
-    pub const NOP_ENC: [u8; 2] = [0x90, 90];
+    pub const NOP_ENC: [u8; 2] = [0x90, 0x90];
     pub const SIMPLE_ENC: [u8; 2] = [0x12, 34];
     pub const BLOCK_SIG: [u8; 2] = [0x13, 45];
     pub const PAGER_SIG: [u8; 4] = [0x9a, 0x93, 0x9a, 0x93];
