@@ -3,10 +3,10 @@
 //! and entropy encoding.
 
 use crate::bitvector::Bitvector;
-use crate::coding::paged::{PagedEntropyDecoder, PagedEntropyEncoder};
 use crate::coding::simple::{SimpleDecoder, SimpleEncoder};
 use crate::lz::matcher::select_matcher;
 use crate::nop::{NopDecoder, NopEncoder};
+use crate::pager::{PagerDecoder, PagerEncoder};
 use crate::utils::signatures::{match_signature, BLOCK_SIG};
 
 use crate::utils::array_encoding::decode as decode_arr;
@@ -67,7 +67,7 @@ pub fn decode_offset_stream(input: &[u8]) -> Option<Vec<u32>> {
 //. Try to perform entropy encoding, but if it fails use nop encoding.
 fn encode_entropy(input: &[u8], ctx: Context) -> Vec<u8> {
     let mut encoded: Vec<u8> = Vec::new();
-    type EncoderTy<'a> = PagedEntropyEncoder<'a, 256, 4096, 131072>;
+    type EncoderTy<'a> = SimpleEncoder<'a, 256, 4096>;
     let new_size = EncoderTy::new(input, &mut encoded, ctx).encode();
 
     if new_size < input.len() {
@@ -79,22 +79,38 @@ fn encode_entropy(input: &[u8], ctx: Context) -> Vec<u8> {
 }
 
 /// Try to perform entropy encoding, but if it fails use nop encoding.
-fn decode_entropy(input: &[u8]) -> Option<Vec<u8>> {
+fn decode_entropy(input: &[u8]) -> Option<(usize, Vec<u8>)> {
     let mut decoded: Vec<u8> = Vec::new();
 
-    type DecoderTy<'a> = PagedEntropyDecoder<'a, 256, 4096>;
-    if DecoderTy::new(input, &mut decoded).decode().is_some() {
-        return Some(decoded);
+    type DecoderTy<'a> = SimpleDecoder<'a, 256, 4096>;
+    if let Some((read, _)) = DecoderTy::new(input, &mut decoded).decode() {
+        return Some((read, decoded));
     }
 
     assert_eq!(decoded.len(), 0);
-    if NopDecoder::new(input, &mut decoded).decode().is_some() {
-        return Some(decoded);
+    if let Some((read, _)) = NopDecoder::new(input, &mut decoded).decode() {
+        return Some((read, decoded));
     }
 
     None
 }
 
+fn encode_paged_entropy(input: &[u8], ctx: Context) -> Vec<u8> {
+    let mut encoded: Vec<u8> = Vec::new();
+    let mut encoder = PagerEncoder::new(input, &mut encoded, ctx);
+    encoder.set_callback(encode_entropy);
+    encoder.set_page_size(1 << 17);
+    let _ = encoder.encode();
+    encoded
+}
+
+fn decode_paged_entropy(input: &[u8]) -> Option<Vec<u8>> {
+    let mut decoded: Vec<u8> = Vec::new();
+    let mut encoder = PagerDecoder::new(input, &mut decoded);
+    encoder.set_callback(decode_entropy);
+    let (_, _) = encoder.decode()?;
+    Some(decoded)
+}
 /// Drives the encoding of a single block.
 pub struct BlockEncoder<'a> {
     /// The uncompressed input.
@@ -162,10 +178,10 @@ impl<'a> BlockEncoder<'a> {
         encode_vl32(&mat_lens, &mut mat_len_u8);
 
         // Entropy encode what is possible.
-        let lit_stream2 = encode_entropy(&lits, ctx);
-        let lit_len_stream2 = encode_entropy(&lit_len_u8, ctx);
+        let lit_stream2 = encode_paged_entropy(&lits, ctx);
+        let lit_len_stream2 = encode_paged_entropy(&lit_len_u8, ctx);
         let mat_off_u8 = encode_offset_stream(&mat_offsets, ctx);
-        let mat_len_stream2 = encode_entropy(&mat_len_u8, ctx);
+        let mat_len_stream2 = encode_paged_entropy(&mat_len_u8, ctx);
 
         // To the wire!
         let mut result = Vec::new();
@@ -210,10 +226,10 @@ impl<'a> BlockDecoder<'a> {
         read += decode_arr(&input[read..], &mut mat_offs)?;
         read += decode_arr(&input[read..], &mut mat_lens)?;
 
-        let literals2 = decode_entropy(&literals)?;
-        let lit_lens2 = decode_entropy(&lit_lens)?;
+        let literals2 = decode_paged_entropy(&literals)?;
+        let lit_lens2 = decode_paged_entropy(&lit_lens)?;
         let mat_offs2 = decode_offset_stream(&mat_offs)?;
-        let mat_lens2 = decode_entropy(&mat_lens)?;
+        let mat_lens2 = decode_paged_entropy(&mat_lens)?;
 
         let mut lit_lens3: Vec<u32> = Vec::new();
         let mut mat_offs3: Vec<u32> = Vec::new();
