@@ -50,10 +50,7 @@ pub fn encode_offset_stream(input: &[u32], ctx: Context) -> Vec<u8> {
 
 /// Decode the list of offsets that were encoded with 'encode_offset_stream'.
 pub fn decode_offset_stream(input: &[u8]) -> Option<Vec<u32>> {
-
-    //let (read, tokens) = decode_offset_entropy(input)?;
-        let (read, tokens) = decode_paged_ent(input, decode_offset_entropy)?;
-
+    let (read, tokens) = decode_paged_ent(input, decode_offset_entropy)?;
 
     let (mut bv, bv_read) = Bitvector::deserialize(&input[read..])?;
     // Check that all of the data was read.
@@ -72,6 +69,7 @@ pub fn decode_offset_stream(input: &[u8]) -> Option<Vec<u32>> {
     Some(res)
 }
 
+// Perform entropy encoding on an input with valid tokens.
 fn encode_offset_entropy(input: &[u8], ctx: Context) -> Vec<u8> {
     let mut encoded: Vec<u8> = Vec::new();
     type EncoderTy<'a> = SimpleEncoder<'a, MAX_OFFSET_BITS, 4096>;
@@ -79,6 +77,7 @@ fn encode_offset_entropy(input: &[u8], ctx: Context) -> Vec<u8> {
     encoded
 }
 
+// Decode the entropy encoding of a list of valid tokens.
 fn decode_offset_entropy(input: &[u8]) -> Option<(usize, Vec<u8>)> {
     let mut decoded: Vec<u8> = Vec::new();
     type DecoderTy<'a> = SimpleDecoder<'a, MAX_OFFSET_BITS, 4096>;
