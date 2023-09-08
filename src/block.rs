@@ -23,6 +23,9 @@ use crate::{Context, Decoder, Encoder};
 /// This is the maximum number of length bits that we allow for offsets. (1<<X)
 const MAX_OFFSET_BITS: usize = 24;
 
+/// Selects the size of each entropy unit.
+const ENTROPY_PAGE_SIZE: usize = 1 << 18;
+
 /// Encode a list of offsets, with a histogram that favors short indices, into
 /// two streams: tokens and extra bits. The tokens are compressed with fse, and
 /// the extra bits are encoded into a bitstream. See 'two_stream_encoding' for
@@ -122,7 +125,7 @@ fn encode_paged_ent(
     let mut encoded: Vec<u8> = Vec::new();
     let mut encoder = PagerEncoder::new(input, &mut encoded, ctx);
     encoder.set_callback(callback);
-    encoder.set_page_size(1 << 17);
+    encoder.set_page_size(ENTROPY_PAGE_SIZE);
     let _ = encoder.encode();
     encoded
 }
