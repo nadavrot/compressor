@@ -1,7 +1,7 @@
 //! The 'PagerEncoder' and 'PagerDecoder' are responsible for taking a stream of bytes and
 //! partitioning them into small blocks that are encoded and decoded individually.
 
-use crate::utils::signatures::{match_signature, PAGER_SIG};
+use crate::utils::signatures::{match_signature, PAGER_SIG, START_PAGE_SIG};
 use crate::{Context, Decoder, Encoder};
 
 /// A callback for handling the encoding of each block.
@@ -50,15 +50,15 @@ impl<'a> PagerEncoder<'a> {
         let callback = self.callback.unwrap();
 
         // Compress each one of the pages using the pipeline.
-        let mut written = 0;
+        let mut written = PAGER_SIG.len();
         for part in parts {
+            self.output.extend(START_PAGE_SIG);
             let compressed = callback(part, self.ctx);
             self.output.extend(compressed.iter());
-            written += compressed.len();
+            written += START_PAGE_SIG.len() + compressed.len();
         }
 
-        // Bytes written plus the signature.
-        written + 4
+        written
     }
 }
 
@@ -88,6 +88,10 @@ impl<'a> PagerDecoder<'a> {
         let mut cursor = PAGER_SIG.len();
         let mut written = 0;
         while cursor < self.input.len() {
+            if !match_signature(&self.input[cursor..], &START_PAGE_SIG) {
+                return None;
+            }
+            cursor += START_PAGE_SIG.len();
             let packet = &self.input[cursor..];
             let (read, buff) = callback(packet)?;
             cursor += read;

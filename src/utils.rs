@@ -8,6 +8,7 @@ pub mod signatures {
     pub const SIMPLE_ENC: [u8; 2] = [0x12, 34];
     pub const BLOCK_SIG: [u8; 2] = [0x13, 45];
     pub const PAGER_SIG: [u8; 4] = [0x9a, 0x93, 0x9a, 0x93];
+    pub const START_PAGE_SIG: [u8; 2] = [0x71, 75];
     pub const FULL_SIG: [u8; 4] = [0x10, 0x14, 0x82, 0x35];
     pub const FILE_EXTENSION: &str = ".rz";
 
