@@ -37,17 +37,19 @@ impl Timer {
             start: Instant::now(),
         }
     }
+
+    fn duration(&self) -> f32 {
+        let now = Instant::now();
+        if let Some(duration) = now.checked_duration_since(self.start) {
+            return duration.as_secs_f32();
+        }
+        0.0
+    }
 }
 
 impl Drop for Timer {
     fn drop(&mut self) {
-        let now = Instant::now();
-        if let Some(duration) = now.checked_duration_since(self.start) {
-            log::info!(
-                "Operation completed in {:03} seconds",
-                duration.as_secs_f32()
-            );
-        }
+        log::info!("Operation completed in {:03} seconds", self.duration());
     }
 }
 
