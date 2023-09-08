@@ -16,7 +16,11 @@ use std::{fs::File, io::Write};
 
 const DEFAULT_COMPRESSION_LEVEL: u8 = 4;
 
-fn save_file(data: &[u8], path: &str) {
+fn save_file(data: &[u8], path: &str, no_write: bool) {
+    if no_write {
+        log::info!("Not saving the result.");
+        return;
+    }
     let mut f = File::create(path).expect("Can't create file");
     f.write_all(data).expect("Unable to write data");
     log::info!("Wrote {}.", &path);
@@ -145,6 +149,12 @@ fn main() {
                 .num_args(1),
         )
         .arg(
+            Arg::new("nowrite")
+                .long("no-write")
+                .help("Don't write the output file.")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("INPUT")
                 .help("Sets the input file to use")
                 .required(true)
@@ -157,6 +167,7 @@ fn main() {
     let mut cli_compress = matches.get_flag("compress");
     let cli_decompress = matches.get_flag("decompress");
     let cli_checked = matches.get_flag("checked");
+    let cli_nowrite = matches.get_flag("nowrite");
     let cli_level: u8 = if let Some(val) = matches.get_one::<String>("level") {
         val.parse::<u8>().unwrap_or(DEFAULT_COMPRESSION_LEVEL)
     } else {
@@ -200,7 +211,7 @@ fn main() {
         if let Some((from, to)) = operate(true, mode, &input, &mut dest, ctx) {
             log::info!("Compressed from {} to {} bytes.", from, to);
             log::info!("Compression ratio is {:.4}x.", from as f64 / to as f64);
-            save_file(&dest, out);
+            save_file(&dest, out, cli_nowrite);
         } else {
             log::info!("Compression failed");
             return;
@@ -231,7 +242,7 @@ fn main() {
 
     if let Some((from, to)) = operate(false, mode, &input, &mut dest, ctx) {
         log::info!("Decompressed from {} to {} bytes.", from, to);
-        save_file(&dest, out);
+        save_file(&dest, out, cli_nowrite);
     } else {
         log::info!("Decompression failed");
     }
