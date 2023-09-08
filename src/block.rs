@@ -3,9 +3,8 @@
 //! and entropy encoding.
 
 use crate::bitvector::Bitvector;
-use crate::coding::simple::{
-    PagedEntropyDecoder, PagedEntropyEncoder, SimpleDecoder, SimpleEncoder,
-};
+use crate::coding::paged::{PagedEntropyDecoder, PagedEntropyEncoder};
+use crate::coding::simple::{SimpleDecoder, SimpleEncoder};
 use crate::lz::matcher::select_matcher;
 use crate::nop::{NopDecoder, NopEncoder};
 use crate::utils::signatures::{match_signature, BLOCK_SIG};

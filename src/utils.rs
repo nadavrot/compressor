@@ -16,6 +16,23 @@ pub mod signatures {
     pub fn match_signature(input: &[u8], signature: &[u8]) -> bool {
         input.starts_with(signature)
     }
+
+    /// Write the value 'val' into 'stream'.
+    pub fn write32(val: u32, stream: &mut Vec<u8>) {
+        let bytes = val.to_be_bytes();
+        stream.extend(bytes);
+    }
+
+    /// Try to decode a number from the input buffer.
+    pub fn read32(input: &[u8]) -> Option<u32> {
+        if input.len() < 4 {
+            return None;
+        }
+        if let Ok(x) = input[0..4].try_into() {
+            return Some(u32::from_be_bytes(x));
+        }
+        None
+    }
 }
 
 /// Implements run length encoding.

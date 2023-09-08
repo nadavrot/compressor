@@ -1,7 +1,9 @@
 //! The 'PagerEncoder' and 'PagerDecoder' are responsible for taking a stream of bytes and
 //! partitioning them into small blocks that are encoded and decoded individually.
 
-use crate::utils::signatures::{match_signature, PAGER_SIG, START_PAGE_SIG};
+use crate::utils::signatures::{
+    match_signature, read32, write32, PAGER_SIG, START_PAGE_SIG,
+};
 use crate::{Context, Decoder, Encoder};
 
 /// A callback for handling the encoding of each block.
@@ -45,17 +47,20 @@ impl<'a> PagerEncoder<'a> {
             parts.push(&self.input[start..end]);
         }
 
-        // Write the signature.
-        self.output.extend(PAGER_SIG);
         let callback = self.callback.unwrap();
 
+        // Write the signature and the number of parts.
+        self.output.extend(PAGER_SIG);
+        write32(parts.len() as u32, self.output);
+        let mut written = PAGER_SIG.len() + 4;
+
         // Compress each one of the pages using the pipeline.
-        let mut written = PAGER_SIG.len();
         for part in parts {
             self.output.extend(START_PAGE_SIG);
             let compressed = callback(part, self.ctx);
+            self.output.extend((compressed.len() as u32).to_be_bytes());
             self.output.extend(compressed.iter());
-            written += START_PAGE_SIG.len() + compressed.len();
+            written += START_PAGE_SIG.len() + 4 + compressed.len();
         }
 
         written
@@ -81,20 +86,31 @@ impl<'a> PagerDecoder<'a> {
     /// Decode the input parameter. Returns the number of bytes consumed and the
     /// number of bytes written if the operation succeeded.
     fn decode_impl(&mut self) -> Option<(usize, usize)> {
+        let callback = self.callback.unwrap();
         if !match_signature(self.input, &PAGER_SIG) {
             return None;
         }
-        let callback = self.callback.unwrap();
         let mut cursor = PAGER_SIG.len();
+        let parts = read32(&self.input[cursor..])?;
+        cursor += 4;
+
         let mut written = 0;
-        while cursor < self.input.len() {
+        for _ in 0..parts {
+            // Read the part signature.
             if !match_signature(&self.input[cursor..], &START_PAGE_SIG) {
                 return None;
             }
             cursor += START_PAGE_SIG.len();
-            let packet = &self.input[cursor..];
+
+            // Read the part length.
+            let length = read32(&self.input[cursor..])? as usize;
+            cursor += 4;
+
+            let packet = &self.input[cursor..cursor + length as usize];
             let (read, buff) = callback(packet)?;
-            cursor += read;
+            debug_assert_eq!(read, length, "Invalid packet?");
+
+            cursor += length;
             written += buff.len();
             self.output.extend(&buff);
         }
