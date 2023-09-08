@@ -3,7 +3,9 @@
 //! and entropy encoding.
 
 use crate::bitvector::Bitvector;
-use crate::coding::simple::{SimpleDecoder, SimpleEncoder};
+use crate::coding::simple::{
+    PagedEntropyDecoder, PagedEntropyEncoder, SimpleDecoder, SimpleEncoder,
+};
 use crate::lz::matcher::select_matcher;
 use crate::nop::{NopDecoder, NopEncoder};
 use crate::utils::signatures::{match_signature, BLOCK_SIG};
@@ -66,7 +68,7 @@ pub fn decode_offset_stream(input: &[u8]) -> Option<Vec<u32>> {
 //. Try to perform entropy encoding, but if it fails use nop encoding.
 fn encode_entropy(input: &[u8], ctx: Context) -> Vec<u8> {
     let mut encoded: Vec<u8> = Vec::new();
-    type EncoderTy<'a> = SimpleEncoder<'a, 256, 4096>;
+    type EncoderTy<'a> = PagedEntropyEncoder<'a, 256, 4096, 131072>;
     let new_size = EncoderTy::new(input, &mut encoded, ctx).encode();
 
     if new_size < input.len() {
@@ -81,7 +83,7 @@ fn encode_entropy(input: &[u8], ctx: Context) -> Vec<u8> {
 fn decode_entropy(input: &[u8]) -> Option<Vec<u8>> {
     let mut decoded: Vec<u8> = Vec::new();
 
-    type DecoderTy<'a> = SimpleDecoder<'a, 256, 4096>;
+    type DecoderTy<'a> = PagedEntropyDecoder<'a, 256, 4096>;
     if DecoderTy::new(input, &mut decoded).decode().is_some() {
         return Some(decoded);
     }
