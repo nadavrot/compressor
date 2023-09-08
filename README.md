@@ -65,10 +65,12 @@ the time in the entropy coding phase.
 
 ![Time breakdown](docs/prof.png)
 
-This chart shows the size breakdown inside the binary. The green slices are the
-literals and literal lengths, and the gray slices show the offsets, and the
-length of the offsets. All of the slices are listed after entropy encoding, as
-they lay in the file.
+This chart shows the size breakdown of the compressed binary. The green slices
+represent the literals and literal lengths, and the gray slices represent the
+match-offsets and the match-lengths. The match-offsets section is split into
+two streams: entropy-encoded tokens, and extra bits which are not entropy
+encoded.
+
 ![size breakdown](docs/sizebreakdown.svg)
 
 The charts below show the match length and offset distributions. The match
