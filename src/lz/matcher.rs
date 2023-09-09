@@ -214,57 +214,57 @@ impl<
         }
 
         // For each character in the input buffer:
-        'outer: while self.cursor + MIN_MATCH < input_len {
+        'outer: while self.cursor + MIN_MATCH + PARSE_SEARCH < input_len {
             // Check if there is a previous match, and save the hash.
             let mat = self.dict.get_match(self.cursor);
             self.dict.save_match(self.cursor);
 
-            if !mat.is_empty() {
-                // If we found a match, try to see if one of the next chars is a
-                // better candidate.
-                let end_of_buffer = self.cursor + MIN_MATCH * 2 > input_len;
-                if !end_of_buffer {
-                    // Enable a form of non-greedy parsing. Explanation:
-                    // http://fastcompression.blogspot.com/2011/12/advanced-parsing-strategies.html
-                    for i in 1..PARSE_SEARCH {
-                        let mat2 = self.dict.get_match(self.cursor + i);
-                        if mat2.is_empty() {
-                            continue;
-                        }
-                        // Check if by skipping 'i' characters we get a
-                        // better match. If we do, construct literals and
-                        // jump forward.
-                        if mat2.len() >= mat.len() + i {
-                            self.cursor += i;
-                            lit = lit.start..lit.end + i;
-                            continue 'outer;
-                        }
-                    }
-                }
-
-                // Try to increase the size of the match backwards and take from
-                // the literals.
-                let reduce = self.dict.grow_match_backwards(&lit, &mat);
-
-                // Insert all of the hashes in the input into the dictionary.
-                // Don't insert the next value because we don't want to have it
-                // in the dictionary when we do the next iteration (hence the -1).
-                let start = self.cursor + 1;
-                let stop = (start + mat.len()).min(input_len - MIN_MATCH) - 1;
-                for i in start..stop {
-                    self.dict.save_match(i);
-                }
-
-                // Update the cursor and return the match.
-                self.cursor += mat.len();
-                let mat = mat.start - reduce..mat.end;
-                lit = lit.start..lit.end - reduce;
-                return Some((lit, mat));
+            if mat.is_empty() {
+                // We didn't find a match. Grow the literal region and move on.
+                self.cursor += 1;
+                lit = lit.start..lit.end + 1;
+                continue;
             }
 
-            // We didn't find a match. Grow the literal region and move on.
-            self.cursor += 1;
-            lit = lit.start..lit.end + 1;
+            // If we found a match, try to see if one of the next chars is a
+            // better candidate.
+            {
+                // Enable a form of non-greedy parsing. Explanation:
+                // http://fastcompression.blogspot.com/2011/12/advanced-parsing-strategies.html
+                for i in 1..PARSE_SEARCH {
+                    let mat2 = self.dict.get_match(self.cursor + i);
+                    if mat2.is_empty() {
+                        continue;
+                    }
+                    // Check if by skipping 'i' characters we get a
+                    // better match. If we do, construct literals and
+                    // jump forward.
+                    if mat2.len() >= mat.len() + i {
+                        self.cursor += i;
+                        lit = lit.start..lit.end + i;
+                        continue 'outer;
+                    }
+                }
+            }
+
+            // Try to increase the size of the match backwards and take from
+            // the literals.
+            let reduce = self.dict.grow_match_backwards(&lit, &mat);
+
+            // Insert all of the hashes in the input into the dictionary.
+            // Don't insert the next value because we don't want to have it
+            // in the dictionary when we do the next iteration (hence the -1).
+            let start = self.cursor + 1;
+            let stop = (start + mat.len()).min(input_len - MIN_MATCH) - 1;
+            for i in start..stop {
+                self.dict.save_match(i);
+            }
+
+            // Update the cursor and return the match.
+            self.cursor += mat.len();
+            let mat = mat.start - reduce..mat.end;
+            lit = lit.start..lit.end - reduce;
+            return Some((lit, mat));
         }
 
         // We are close to the end of the buffer. Grow the literal section.
