@@ -268,6 +268,10 @@ impl<
             // If we have a new match and a previous candidate, select between
             // them.
             if let Some(can) = &candidate {
+                // Distance between where the candidate started and where the
+                // new match starts will be filled with literals.
+                let lit_len = self.cursor - can.2;
+
                 let candidate_size = can.1.len();
                 let new_match_size = mat.len();
                 let new_mat_closer = can.1.start < mat.start;
@@ -275,9 +279,11 @@ impl<
                 // extra literals in this calculation. If the size is the same
                 // then break the tie by looking at the offset of the match,
                 // where lower is better.
-                if new_match_size > candidate_size + 1
-                    || (new_match_size > candidate_size && new_mat_closer)
-                {
+                let better_size = new_match_size > candidate_size + lit_len;
+                let same_size_better_offset = new_match_size
+                    == candidate_size + lit_len
+                    && new_mat_closer;
+                if better_size || same_size_better_offset {
                     // Pick a new match candidate.
                     debug_assert!(can.3 < self.cursor + mat.len());
                     candidate = Some((
