@@ -215,9 +215,30 @@ impl<
             return None;
         }
 
+        // Candidate: lit, match, index (match start point), cursor after match.
+        let mut candidate: Option<(Range<usize>, Range<usize>, usize, usize)> =
+            None;
+
         // For each character in the input buffer:
-        'outer: while self.cursor + MIN_MATCH + PARSE_SEARCH < input_len {
-            // Check if there is a previous match, and save the hash.
+        while self.cursor + MIN_MATCH < input_len {
+            // If we've exceeded the window, return the candidate.
+            if let Some(can) = &candidate {
+                if self.cursor >= can.2 + PARSE_SEARCH {
+                    debug_assert!(self.cursor < can.3);
+                    // When accepting a match, hash the content of the match.
+                    for i in self.cursor..(can.3).min(input_len - MIN_MATCH) {
+                        self.dict.save_match(i);
+                    }
+                    self.cursor = can.3;
+                    let mut lit = can.0.clone();
+                    let mut mat = can.1.clone();
+                    self.dict.grow_match_backwards(&mut lit, &mut mat);
+                    debug_assert!(mat.end < input_len);
+                    return Some((lit, mat));
+                }
+            }
+
+            // Check if there is a previous match and save the hash.
             let mat = self.dict.get_match(self.cursor);
             self.dict.save_match(self.cursor);
 
@@ -228,43 +249,65 @@ impl<
                 continue;
             }
 
-            // If we found a match, try to see if one of the next chars is a
-            // better candidate.
-            {
-                // Enable a form of non-greedy parsing. Explanation:
-                // http://fastcompression.blogspot.com/2011/12/advanced-parsing-strategies.html
-                for i in 1..PARSE_SEARCH {
-                    let mat2 = self.dict.get_match(self.cursor + i);
-                    if mat2.is_empty() {
-                        continue;
-                    }
-                    // Check if by skipping 'i' characters we get a
-                    // better match. If we do, construct literals and
-                    // jump forward.
-                    if mat2.len() >= mat.len() + i {
-                        self.cursor += i;
-                        lit = lit.start..lit.end + i;
-                        continue 'outer;
-                    }
+            // If we don't have a previous candidate, save this match as a
+            // candidate.
+            if candidate.is_none() {
+                candidate = Some((
+                    lit.clone(),
+                    mat.clone(),
+                    self.cursor,
+                    self.cursor + mat.len(),
+                ));
+
+                // And continue to the next character.
+                self.cursor += 1;
+                lit = lit.start..lit.end + 1;
+                continue;
+            }
+
+            // If we have a new match and a previous candidate, select between
+            // them.
+            if let Some(can) = &candidate {
+                let candidate_size = can.1.len();
+                let new_match_size = mat.len();
+                let new_mat_closer = can.1.start < mat.start;
+                // Check if the new match is bigger. We include the size of the
+                // extra literals in this calculation. If the size is the same
+                // then break the tie by looking at the offset of the match,
+                // where lower is better.
+                if new_match_size > candidate_size + 1
+                    || (new_match_size > candidate_size && new_mat_closer)
+                {
+                    // Pick a new match candidate.
+                    debug_assert!(can.3 < self.cursor + mat.len());
+                    candidate = Some((
+                        lit.clone(),
+                        mat.clone(),
+                        self.cursor,
+                        self.cursor + mat.len(),
+                    ));
+
+                    self.cursor += 1;
+                    lit = lit.start..lit.end + 1;
+                    continue;
+                } else {
+                    // Stay with the current match candidate.
+                    self.cursor += 1;
+                    lit = lit.start..lit.end + 1;
+                    continue;
                 }
             }
+        } // End of main loop.
 
-            // Insert all of the hashes in the input into the dictionary.
-            // Don't insert the next value because we don't want to have it
-            // in the dictionary when we do the next iteration (hence the -1).
-            let start = self.cursor + 1;
-            let stop = (start + mat.len()).min(input_len - MIN_MATCH) - 1;
-            for i in start..stop {
-                self.dict.save_match(i);
-            }
-
-            // Update the cursor and return the match.
-            self.cursor += mat.len();
-
-            // Try to increase the size of the match backwards and take from
-            // the literals.
-            let mut mat = mat;
+        // We finished scanning the buffer. Return the last candidate.
+        if let Some(can) = &candidate {
+            debug_assert!(self.cursor < can.3);
+            self.cursor = can.3;
+            let mut lit = can.0.clone();
+            let mut mat = can.1.clone();
             self.dict.grow_match_backwards(&mut lit, &mut mat);
+
+            debug_assert!(mat.end < input_len);
             return Some((lit, mat));
         }
 
