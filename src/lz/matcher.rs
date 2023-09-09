@@ -228,15 +228,16 @@ impl<
                     // http://fastcompression.blogspot.com/2011/12/advanced-parsing-strategies.html
                     for i in 1..PARSE_SEARCH {
                         let mat2 = self.dict.get_match(self.cursor + i);
-                        if !mat2.is_empty() {
-                            // Check if by skipping 'i' characters we get a
-                            // better match. If we do, construct literals and
-                            // jump forward.
-                            if mat2.len() >= mat.len() + i {
-                                self.cursor += i;
-                                lit = lit.start..lit.end + i;
-                                continue 'outer;
-                            }
+                        if mat2.is_empty() {
+                            continue;
+                        }
+                        // Check if by skipping 'i' characters we get a
+                        // better match. If we do, construct literals and
+                        // jump forward.
+                        if mat2.len() >= mat.len() + i {
+                            self.cursor += i;
+                            lit = lit.start..lit.end + i;
+                            continue 'outer;
                         }
                     }
                 }
