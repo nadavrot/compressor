@@ -146,12 +146,12 @@ impl<
     /// Returns the number of bytes that can be removed from the literal region.
     fn grow_match_backwards(
         &self,
-        lit: &Range<usize>,
-        mat: &Range<usize>,
+        lit: &mut Range<usize>,
+        mat: &mut Range<usize>,
     ) -> usize {
         // We go lit_len steps backwards, so don't overflow. Also, don't handle
         // empty match or literal packets.
-        if mat.start <= lit.len() || mat.is_empty() || lit.is_empty() {
+        if mat.start <= lit.len() || (*mat).is_empty() || (*lit).is_empty() {
             return 0;
         }
         let mut match_ptr = mat.start - 1;
@@ -163,6 +163,8 @@ impl<
             lit_ptr -= 1;
             i += 1;
         }
+        *lit = lit.start..(lit.end - i);
+        *mat = (mat.start - i)..mat.end;
         i
     }
 }
@@ -247,10 +249,6 @@ impl<
                 }
             }
 
-            // Try to increase the size of the match backwards and take from
-            // the literals.
-            let reduce = self.dict.grow_match_backwards(&lit, &mat);
-
             // Insert all of the hashes in the input into the dictionary.
             // Don't insert the next value because we don't want to have it
             // in the dictionary when we do the next iteration (hence the -1).
@@ -262,8 +260,11 @@ impl<
 
             // Update the cursor and return the match.
             self.cursor += mat.len();
-            let mat = mat.start - reduce..mat.end;
-            lit = lit.start..lit.end - reduce;
+
+            // Try to increase the size of the match backwards and take from
+            // the literals.
+            let mut mat = mat;
+            self.dict.grow_match_backwards(&mut lit, &mut mat);
             return Some((lit, mat));
         }
 
@@ -372,13 +373,11 @@ impl<
         let mut selected_matches = Vec::new();
 
         while curr < input_len {
-            let mat = all_matches[curr].clone();
+            let mut mat = all_matches[curr].clone();
             if !mat.is_empty() {
-                let reduce = dict.grow_match_backwards(&lit, &mat);
+                dict.grow_match_backwards(&mut lit, &mut mat);
                 curr += mat.len();
-                let lt = lit.start..lit.end - reduce;
-                let mt = mat.start - reduce..mat.end;
-                selected_matches.push((lt, mt));
+                selected_matches.push((lit, mat));
                 lit = curr..curr;
                 continue;
             } else {
