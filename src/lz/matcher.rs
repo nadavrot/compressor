@@ -92,8 +92,9 @@ impl<
     }
 
     /// Return a match to a previous string that matches a string that starts at
-    /// 'idx'.
-    fn get_match(&self, idx: usize) -> Range<usize> {
+    /// 'idx'. The value 'prev_best' is the length of a previous match. Don't
+    /// bother finding matches that are shorter than this value.
+    fn get_match(&self, idx: usize, mut prev_best: usize) -> Range<usize> {
         let dic_idx = self.get_match_candidate(idx);
         let mut best = 0..0;
 
@@ -108,12 +109,13 @@ impl<
             if offset >= MAX_OFFSET {
                 break;
             }
-            if self.early_disqualify(loc as usize, idx, best.len()) {
+            if self.early_disqualify(loc as usize, idx, prev_best) {
                 continue;
             }
             let len = self.get_match_length(loc as usize, idx);
             if best.len() < len {
                 best = (loc as usize)..(loc as usize) + len;
+                prev_best = prev_best.max(len);
             }
         }
 
@@ -238,8 +240,13 @@ impl<
                 }
             }
 
+            let mut prev = 0;
+            if let Some(can) = &candidate {
+                prev = can.1.len();
+            }
+
             // Check if there is a previous match and save the hash.
-            let mat = self.dict.get_match(self.cursor);
+            let mat = self.dict.get_match(self.cursor, prev);
             self.dict.save_match(self.cursor);
 
             if mat.is_empty() {
@@ -371,7 +378,7 @@ impl<
         // First, collect all of the matches for all of the input.
         for cursor in 0..input_len - MIN_MATCH {
             // Check if there is a previous match, and save the hash.
-            let mat = dict.get_match(cursor);
+            let mat = dict.get_match(cursor, 0);
             dict.save_match(cursor);
             all_matches.push(mat);
         }
