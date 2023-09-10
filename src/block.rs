@@ -21,7 +21,8 @@ use crate::utils::variable_length_encoding::encode_array32 as encode_vl32;
 use crate::{Context, Decoder, Encoder};
 
 /// This is the maximum number of length bits that we allow for offsets. (1<<X)
-const MAX_OFFSET_BITS: usize = 24;
+/// This is also the number of symbols that we use to encode tokens.
+const OFFSET_BITS: usize = 24;
 
 /// Selects the size of each entropy unit.
 const ENTROPY_PAGE_SIZE: usize = 1 << 18;
@@ -30,7 +31,10 @@ const ENTROPY_PAGE_SIZE: usize = 1 << 18;
 /// two streams: tokens and extra bits. The tokens are compressed with fse, and
 /// the extra bits are encoded into a bitstream. See 'two_stream_encoding' for
 /// details.
-pub fn encode_offset_stream(input: &[u32], ctx: Context) -> Vec<u8> {
+pub fn encode_offset_stream<const SYMS: usize>(
+    input: &[u32],
+    ctx: Context,
+) -> Vec<u8> {
     let mut bv = Bitvector::new();
     let mut tokens = Vec::new();
     let mut encoded = Vec::new();
@@ -40,7 +44,7 @@ pub fn encode_offset_stream(input: &[u32], ctx: Context) -> Vec<u8> {
         tokens.push(two_stream_encoding::encode32(*val, &mut bv) as u8);
     }
 
-    let res = encode_paged_ent(&tokens, ctx, encode_offset_entropy);
+    let res = encode_paged_ent(&tokens, ctx, encode_offset_entropy::<SYMS>);
     encoded.extend(res);
 
     // Append the bitstream after the tokens.
@@ -49,8 +53,11 @@ pub fn encode_offset_stream(input: &[u32], ctx: Context) -> Vec<u8> {
 }
 
 /// Decode the list of offsets that were encoded with 'encode_offset_stream'.
-pub fn decode_offset_stream(input: &[u8]) -> Option<Vec<u32>> {
-    let (read, tokens) = decode_paged_ent(input, decode_offset_entropy)?;
+pub fn decode_offset_stream<const SYMS: usize>(
+    input: &[u8],
+) -> Option<Vec<u32>> {
+    let (read, tokens) =
+        decode_paged_ent(input, decode_offset_entropy::<SYMS>)?;
 
     let (mut bv, bv_read) = Bitvector::deserialize(&input[read..])?;
     // Check that all of the data was read.
@@ -70,18 +77,22 @@ pub fn decode_offset_stream(input: &[u8]) -> Option<Vec<u32>> {
 }
 
 // Perform entropy encoding on an input with valid tokens.
-fn encode_offset_entropy(input: &[u8], ctx: Context) -> Vec<u8> {
+fn encode_offset_entropy<const SYMS: usize>(
+    input: &[u8],
+    ctx: Context,
+) -> Vec<u8> {
     let mut encoded: Vec<u8> = Vec::new();
-    type EncoderTy<'a> = SimpleEncoder<'a, MAX_OFFSET_BITS, 4096>;
-    let _ = EncoderTy::new(input, &mut encoded, ctx).encode();
+    let _ = SimpleEncoder::<SYMS, 4096>::new(input, &mut encoded, ctx).encode();
     encoded
 }
 
 // Decode the entropy encoding of a list of valid tokens.
-fn decode_offset_entropy(input: &[u8]) -> Option<(usize, Vec<u8>)> {
+fn decode_offset_entropy<const SYMS: usize>(
+    input: &[u8],
+) -> Option<(usize, Vec<u8>)> {
     let mut decoded: Vec<u8> = Vec::new();
-    type DecoderTy<'a> = SimpleDecoder<'a, MAX_OFFSET_BITS, 4096>;
-    let (read, _) = DecoderTy::new(input, &mut decoded).decode()?;
+    let mut decoder = SimpleDecoder::<SYMS, 4096>::new(input, &mut decoded);
+    let (read, _) = decoder.decode()?;
     Some((read, decoded))
 }
 
@@ -209,7 +220,7 @@ impl<'a> BlockEncoder<'a> {
         // Entropy encode what is possible.
         let lit_stream2 = encode_paged_ent(&lits, ctx, ent_or_nop);
         let lit_len_stream2 = encode_paged_ent(&lit_len_u8, ctx, ent_or_nop);
-        let mat_off_u8 = encode_offset_stream(&mat_offsets, ctx);
+        let mat_off_u8 = encode_offset_stream::<OFFSET_BITS>(&mat_offsets, ctx);
         let mat_len_stream2 = encode_paged_ent(&mat_len_u8, ctx, ent_or_nop);
 
         // To the wire!
@@ -257,7 +268,7 @@ impl<'a> BlockDecoder<'a> {
 
         let literals2 = decode_paged_ent(&literals, decode_ent_or_nop)?.1;
         let lit_lens2 = decode_paged_ent(&lit_lens, decode_ent_or_nop)?.1;
-        let mat_offs2 = decode_offset_stream(&mat_offs)?;
+        let mat_offs2 = decode_offset_stream::<OFFSET_BITS>(&mat_offs)?;
         let mat_lens2 = decode_paged_ent(&mat_lens, decode_ent_or_nop)?.1;
 
         let mut lit_lens3: Vec<u32> = Vec::new();

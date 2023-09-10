@@ -163,7 +163,7 @@ fn test_pager_round_trip() {
 fn test_offset_encoder() {
     let input = [0, 1, 2, 3, 12, 65233, 11241];
     let ctx = Context::new(5, 120);
-    let res = encode_offset_stream(&input, ctx);
-    let out = decode_offset_stream(&res).unwrap();
+    let res = encode_offset_stream::<17>(&input, ctx);
+    let out = decode_offset_stream::<17>(&res).unwrap();
     assert_eq!(out, input);
 }
