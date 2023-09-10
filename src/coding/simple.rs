@@ -11,7 +11,7 @@ type DecodeTable = Vec<(u32, u8)>;
 struct Coder<const ALPHABET: usize, const TABLESIZE: usize> {
     /// This is the main encoder table.
     /// A table of [Symbol x State] (use the get_state accessor).
-    encode_table: Vec<u32>,
+    encode_table: Vec<u16>,
     /// Maps symbol to the max state that can encode this symbol.
     max_state: Vec<u32>,
     /// This is the main decoder table.
@@ -32,10 +32,8 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
     }
 
     /// Check if 'state' is a valid state.
-    fn check_state(state: u32) {
-        debug_assert!(
-            state as usize >= TABLESIZE && state as usize <= TABLESIZE * 2
-        );
+    fn check_state(state: usize) {
+        debug_assert!(state >= TABLESIZE && state <= TABLESIZE * 2);
     }
 
     /// Initialize the coder with the input data and create the
@@ -90,7 +88,7 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
     }
 
     /// Return a reference to the encoding table.
-    pub fn get_enc_state(&mut self, sym: usize, state: usize) -> &mut u32 {
+    pub fn get_enc_state(&mut self, sym: usize, state: usize) -> &mut u16 {
         debug_assert!(sym < ALPHABET && state < TABLESIZE * 2);
         &mut self.encode_table[state * ALPHABET + sym]
     }
@@ -136,7 +134,7 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
 
             // Fill the encode table.
             let entry = self.get_enc_state(sym as usize, from_state as usize);
-            *entry = (to_state + TABLESIZE) as u32;
+            *entry = (to_state + TABLESIZE) as u16;
 
             // Fill the decode table.
             debug_assert_eq!(self.decode_table[to_state + TABLESIZE].0, 0);
@@ -183,7 +181,7 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
             let above = max_state;
             let next_iter = above / 2;
             let entry = self.get_enc_state(sym, next_iter as usize);
-            Self::check_state(*entry);
+            Self::check_state(*entry as usize);
         }
     }
 }
@@ -266,7 +264,7 @@ impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
         sym: u8,
         bv: &mut Bitvector,
     ) {
-        Coder::<ALPHABET, TABLESIZE>::check_state(*state);
+        Coder::<ALPHABET, TABLESIZE>::check_state(*state as usize);
         debug_assert!(ALPHABET > sym as usize, "Invalid symbol");
 
         let max_state = self.coder.get_max_state(sym as usize) as u32;
@@ -278,8 +276,9 @@ impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
             bv.push_word(lowest_bit as u64, 1);
         }
 
-        *state = *self.coder.get_enc_state(sym as usize, *state as usize);
-        Coder::<ALPHABET, TABLESIZE>::check_state(*state);
+        *state =
+            *self.coder.get_enc_state(sym as usize, *state as usize) as u32;
+        Coder::<ALPHABET, TABLESIZE>::check_state(*state as usize);
     }
 }
 
@@ -329,7 +328,7 @@ impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
         bv: &mut Bitvector,
         state: &mut u32,
     ) -> Option<u8> {
-        Coder::<ALPHABET, TABLESIZE>::check_state(*state);
+        Coder::<ALPHABET, TABLESIZE>::check_state(*state as usize);
 
         let (new_state, sym) = self.coder.get_dec_state(*state as usize);
 
