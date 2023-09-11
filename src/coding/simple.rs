@@ -90,7 +90,7 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
     /// Return a reference to the encoding table.
     pub fn get_enc_state(&mut self, sym: usize, state: usize) -> &mut u16 {
         debug_assert!(sym < ALPHABET && state < TABLESIZE * 2);
-        &mut self.encode_table[state * ALPHABET + sym]
+        &mut self.encode_table[(sym * TABLESIZE * 2) + state]
     }
 
     pub fn get_max_state(&self, sym: usize) -> usize {
