@@ -102,3 +102,33 @@ fn test_bitvector_bug2() {
     let val = bv.pop_word(64);
     assert_eq!(0x13, val);
 }
+
+#[test]
+fn test_bitvector_endianness() {
+    let mut bv = Bitvector::new();
+    bv.push_word(0x12, 8);
+    let a = bv.pop_word(8);
+    bv.push_word(0x1, 4);
+    bv.push_word(0x2, 4);
+    let b = bv.pop_word(8);
+    assert_eq!(a, b);
+}
+
+#[test]
+fn test_bitvector_bug4() {
+    let mut bv0 = Bitvector::new();
+    let mut bv1 = Bitvector::new();
+
+    let elem: u64 = 5657;
+    let num_bits = 6;
+    let mut state0 = elem;
+    for _ in 0..num_bits {
+        bv0.push_word(state0, 1);
+        state0 >>= 1;
+    }
+    let mut state1 = elem;
+    bv1.push_word(state1, num_bits);
+    state1 >>= num_bits;
+    assert_eq!(state1, state0);
+    assert_eq!(bv0, bv1);
+}
