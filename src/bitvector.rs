@@ -6,8 +6,8 @@ pub struct Bitvector {
     /// Stores the packed part of the bitvector.
     data: Vec<u64>,
     /// Stores the last 64bit vectors, for easy access.
-    /// The bits are always packed to the right [xxxxx012345]
-    /// The last word always has 0..63 bits.
+    /// The bits are always packed to the right [xxxxx543210]
+    /// The last word always has 0..63 bits. Bits above 'len' bits are zero.
     last: u64,
     // Points to the next free bit (also size of bitvector).
     len: usize,
@@ -34,6 +34,18 @@ impl Bitvector {
         self.data = Vec::new();
     }
 
+    pub fn verify(&self) {
+        // Check the invariant that the bits trailing the last allocated bit are
+        // all zero.
+        debug_assert!(
+            self.last == Self::clear_upper_bits(self.last, self.len % 64)
+        );
+        // Check that we have the right number of words allocated to support the
+        // length of the bitstream.
+        let allocated = self.data.len() * 64 + 64;
+        debug_assert!(self.len < allocated && self.len + 64 >= allocated);
+    }
+
     /// Set all of the bits above 'keep' to zero.
     pub fn clear_upper_bits(bits: u64, keep: usize) -> u64 {
         let amt: u32 = (64 - keep) as u32;
@@ -41,70 +53,79 @@ impl Bitvector {
         shl.checked_shr(amt).unwrap_or(0)
     }
 
-    /// Push the lowest 'len' bits from 'bits'.
-    pub fn push_word(&mut self, bits: u64, len: usize) {
-        debug_assert!(len <= 64, "Pushing too many bits");
-        let bits = Self::clear_upper_bits(bits, len);
-        let avail = 64 - self.len % 64;
+    /// Push the lowest 'len' bits from 'bits'. The bits are inserted into the
+    /// bitstream from the right as if shifted right one by one.
+    pub fn push_word(&mut self, bits: u64, num: usize) {
+        debug_assert!(num <= 64, "Pushing too many bits");
+        let bits = Self::clear_upper_bits(bits, num);
+        let first_free_bit = self.len % 64;
+        let avail = 64 - first_free_bit;
 
         // Try to push the bits into the free word.
-        if avail >= len {
-            self.last <<= len % 64;
-            self.last |= bits;
-            self.len += len;
+        if avail >= num {
+            self.last |= bits << first_free_bit;
+            self.len += num;
 
             // If the free word is filled, flush it.
-            if self.len % 64 == 0 && len > 0 {
+            if self.len % 64 == 0 && num > 0 {
                 self.data.push(self.last);
                 self.last = 0;
             }
+            self.verify();
             return;
         }
 
-        // Push the first chunk:
-        let upper = bits >> (len - avail);
-        let lower = Self::clear_upper_bits(bits, len - avail);
-        self.last <<= avail; // Make room for 'upper'
-        self.last |= upper; // Fill the bits.
+        // Prepare the upper part of the word that does not fit in the current
+        // free word. It will go into a new free word.
+        let upper_part = Self::clear_upper_bits(bits >> avail, num - avail);
 
-        // Save the free word and start a new word.
+        // Save save the lower part of the input to the upper part of the free
+        // word and save it to the stream.
+        self.last |= bits << first_free_bit;
         self.data.push(self.last);
-        self.last = lower;
-        self.len += len;
+
+        self.last = upper_part;
+        self.len += num;
+        self.verify();
     }
 
     /// Remove 'len' bits from 'bits'.
     #[must_use]
-    pub fn pop_word(&mut self, len: usize) -> u64 {
-        debug_assert!(self.len >= len, "Taking too many bits");
+    pub fn pop_word(&mut self, num: usize) -> u64 {
+        debug_assert!(self.len >= num, "Taking too many bits");
         let avail = self.len % 64;
 
         // Try to extract the bits from the last word.
-        if avail >= len {
-            let curr = self.last;
-            self.last >>= len;
-            self.len -= len;
-            return Self::clear_upper_bits(curr, len);
+        if avail >= num {
+            let res = self.last >> (avail - num);
+            self.last = Self::clear_upper_bits(self.last, avail - num);
+            self.len -= num;
+            self.verify();
+            return res;
         }
 
         // We need to take some bits from the free word and some from the
-        // next word. The upper part of the word sit in the bit stream and
-        // the lower part sits in the free word.
-        // [XXXXXXXX UUUUU][.....LL]
+        // next word. The upper part of the word sit in the free word and
+        // the lower part sits in the allocated array.
+        // [XXXXXXXX LLLLL][UUUU....]
 
-        self.len -= len; // Mark the bits as taken.
-        let low_len = avail; // Take all of the available bits.
-        let high_len = len - avail; // Update how many bits are left to take.
+        self.len -= num; // Mark the bits as taken.
+        let upper_len = avail; // Prepare to take all bits from the free word.
+        let lower_len = num - avail; // Find out how many more bits are needed.
 
-        let lower = Self::clear_upper_bits(self.last, low_len);
+        let upper = Self::clear_upper_bits(self.last, upper_len);
 
         // Next, take the next few bits from the next word. Notice that we need
         // to take at least one bit to satisfy the requirement that the last
         // word as 0..63 bits.
         self.last = self.data.pop().unwrap();
-        let upper = Self::clear_upper_bits(self.last, high_len);
-        self.last >>= high_len % 64;
-        (upper << low_len) | lower
+        // Take the upper part of the next word.
+        let lower = self.last >> (64 - lower_len);
+        // Overwrite it with zeros to ensure that bits beyond the bitstream are
+        // always zero.
+        self.last = Self::clear_upper_bits(self.last, self.len % 64);
+        self.verify();
+        (upper << (lower_len % 64)) | lower
     }
 
     #[must_use]

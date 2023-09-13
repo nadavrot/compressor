@@ -35,16 +35,16 @@ fn test_bitvector_simple() {
     bv.push_word(0b1101, 4);
     assert_eq!(bv.len(), 4);
     assert_eq!(bv.pop_word(1), 1);
-    assert_eq!(bv.pop_word(1), 0);
     assert_eq!(bv.pop_word(1), 1);
+    assert_eq!(bv.pop_word(1), 0);
     assert_eq!(bv.pop_word(1), 1);
     assert_eq!(bv.len(), 0);
 
     bv.push_word(0xffaa, 16);
     let lower = bv.pop_word(8);
     let upper = bv.pop_word(8);
-    assert_eq!(lower, 0xaa);
-    assert_eq!(upper, 0xff);
+    assert_eq!(lower, 0xff);
+    assert_eq!(upper, 0xaa);
 }
 
 #[test]
@@ -108,8 +108,8 @@ fn test_bitvector_endianness() {
     let mut bv = Bitvector::new();
     bv.push_word(0x12, 8);
     let a = bv.pop_word(8);
-    bv.push_word(0x1, 4);
     bv.push_word(0x2, 4);
+    bv.push_word(0x1, 4);
     let b = bv.pop_word(8);
     assert_eq!(a, b);
 }
@@ -131,4 +131,20 @@ fn test_bitvector_bug4() {
     state1 >>= num_bits;
     assert_eq!(state1, state0);
     assert_eq!(bv0, bv1);
+}
+
+#[test]
+fn test_bitvector_bug5() {
+    let mut bv = Bitvector::new();
+    bv.push_word(0, 2);
+    bv.push_word(0, 64);
+    let _ = bv.pop_word(64);
+    bv.push_word(1, 1);
+    bv.push_word(0xff, 64);
+    let _ = bv.pop_word(64);
+    bv.push_word(2, 1);
+    let val = 2 * 713;
+    bv.push_word(val, 64);
+    let val2 = bv.pop_word(64);
+    assert_eq!(val, val2);
 }
