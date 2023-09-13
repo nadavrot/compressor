@@ -362,12 +362,22 @@ impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
         *state = new_state;
 
         // Re-normalize the state and bring it to the valid range.
-        while TABLESIZE > *state as usize && !bv.is_empty() {
-            let bit = bv.pop_word(1);
-            *state <<= 1;
-            *state |= bit as u32;
+        if TABLESIZE <= *state as usize {
+            return Some(sym);
         }
 
+        // Make sure that we have exactly TABLESIZE bits in the state.
+        let num_bits = num_bits(TABLESIZE as u32) - num_bits(*state);
+        if num_bits > bv.len() as u32 {
+            return None; // Invalid input. Not enough bits in the stream.
+        }
+
+        // Load the bits and update the state.
+        let bits = bv.pop_word(num_bits as usize);
+        *state <<= num_bits;
+        *state |= bits as u32;
+
+        Coder::<ALPHABET, TABLESIZE>::check_state(*state as usize);
         Some(sym)
     }
 
