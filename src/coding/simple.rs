@@ -12,8 +12,10 @@ struct Coder<const ALPHABET: usize, const TABLESIZE: usize> {
     /// This is the main encoder table.
     /// A table of [Symbol x State] (use the get_state accessor).
     encode_table: Vec<u16>,
-    /// Maps symbol to the max state that can encode this symbol.
-    max_state: Vec<u32>,
+    /// Maps symbol to the max state that can encode this symbol, and the number
+    /// of bits that we need to shift the state to get from the upper part of
+    /// the table down to the encode-able state.
+    max_state: Vec<(u16, u16)>,
     /// This is the main decoder table.
     /// Maps each state to (next_state, sym)
     decode_table: DecodeTable,
@@ -25,7 +27,7 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
     pub fn new() -> Self {
         Self {
             encode_table: vec![0; ALPHABET * TABLESIZE * 2],
-            max_state: vec![0; ALPHABET],
+            max_state: vec![(0, 0); ALPHABET],
             decode_table: vec![(0, 0); TABLESIZE * 2],
             norm_hist: Vec::new(),
         }
@@ -93,8 +95,10 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
         &mut self.encode_table[(sym * TABLESIZE * 2) + state]
     }
 
-    pub fn get_max_state(&self, sym: usize) -> usize {
-        self.max_state[sym] as usize
+    /// Return the max state and the number of shift bits for each symbol.
+    pub fn get_max_state(&self, sym: usize) -> (u32, u32) {
+        let p = self.max_state[sym];
+        (p.0 as u32, p.1 as u32)
     }
 
     /// Given given 'state', a state in the decode table, the method returns a
@@ -113,6 +117,7 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
     fn create_tables(&mut self, norm_hist: &[u32], state_list: &[u8]) {
         debug_assert!(Self::is_valid_histogram(norm_hist));
         assert!(state_list.len() == TABLESIZE, "Invalid table size");
+        let mut max_state = [0; ALPHABET];
 
         // Place the symbols in the table at an offset based on their frequency,
         // such that each symbol is placed between F and 2F.
@@ -120,7 +125,7 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
         // http://www.ezcodesample.com/abs/abs_article.html
         for sym in 0..ALPHABET {
             let is_zero = norm_hist[sym] == 0;
-            self.max_state[sym] = if is_zero { 0 } else { norm_hist[sym] - 1 };
+            max_state[sym] = if is_zero { 0 } else { norm_hist[sym] - 1 };
         }
 
         // For each state in the table:
@@ -129,8 +134,8 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
             let sym = state_list[to_state];
 
             // Keep track the highest state for each symbol.
-            let from_state = self.max_state[sym as usize];
-            self.max_state[sym as usize] += 1;
+            let from_state = max_state[sym as usize];
+            max_state[sym as usize] += 1;
 
             // Fill the encode table.
             let entry = self.get_enc_state(sym as usize, from_state as usize);
@@ -139,6 +144,20 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
             // Fill the decode table.
             debug_assert_eq!(self.decode_table[to_state + TABLESIZE].0, 0);
             self.decode_table[to_state + TABLESIZE] = (from_state, sym);
+        }
+
+        // Record how many bits we need to shift the state, which is (at the
+        // time of encoding) in the upper part of the table, down to the
+        // encode-able range, which is (F..2F).
+        for sym in 0..ALPHABET {
+            let table_bits = num_bits(TABLESIZE as u32);
+            let max_state_bits = num_bits(max_state[sym]);
+            let shift_bits = if table_bits > max_state_bits {
+                table_bits - max_state_bits
+            } else {
+                0
+            };
+            self.max_state[sym] = (max_state[sym] as u16, shift_bits as u16);
         }
 
         if cfg!(debug_assertions) {
@@ -173,7 +192,7 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
             }
             // Reference make_tables1 by cbloom
             // https://www.cbloom.com/src/ans_learning.cpp
-            let max_state = self.max_state[sym];
+            let max_state = self.get_max_state(sym).0;
             let f = norm_hist[sym];
             // The states for the symbols are spread between F and 2F.
             debug_assert!(max_state == f * 2 - 1);
@@ -267,14 +286,20 @@ impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
         Coder::<ALPHABET, TABLESIZE>::check_state(*state as usize);
         debug_assert!(ALPHABET > sym as usize, "Invalid symbol");
 
-        let max_state = self.coder.get_max_state(sym as usize) as u32;
-
         // Re-normalize: bring the state back to the encodable range.
-        while *state >= max_state {
-            let lowest_bit = *state & 0x1;
-            *state /= 2;
-            bv.push_word(lowest_bit as u64, 1);
+        // Notice that we don't have to rely on the pre-computed num-bits value
+        // and we can normalize the state using a loop:
+        //   while state >= max_state {
+        //    bv.push_word(state, 1);
+        //    state /= 2;
+        //   }
+        let (max_state, mut num_bits) = self.coder.get_max_state(sym as usize);
+        if (*state >> num_bits) >= max_state {
+            num_bits += 1;
         }
+
+        bv.push_word(*state as u64, num_bits as usize);
+        *state >>= num_bits;
 
         *state =
             *self.coder.get_enc_state(sym as usize, *state as usize) as u32;
