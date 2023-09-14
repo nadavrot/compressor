@@ -35,10 +35,17 @@ To find matches from earlier in the file the matcher fetches 4 bytes and finds t
 
 There are a few tricks that can speed up the match speed. First, after a first match is found it is possible to quickly disqualify future matches. If a match of length X is found, the cache module starts looking at index X+1, to quickly disqualify the match, instead of scanning from the first byte of the match string. 
 
- 
 ## Parser
 
+THe parser is responsible for selecting the right matches between multiple candidates, while minimizing compression time. Selecting a match may preclude the possibility of selecting a longer match that may start one or two bytes later. It is not practical to scan all possible combinations, and the parser needs to rely on heuristics and skip some combinations. 
+
+The parser uses a look-ahead feature that compares the current match to the next few matches that start at the following bytes. The number of bytes to look ahead depends on the comprssion level. To select the best match the parser calculates the cost of the literals that will be emitted if a further match will be selected, the location of the end of the match, and the offset to the match destination (longer matches take more bytes to encode). 
+
+It is difficult to have an accurate cost model because the cost of the offset field and the literal sequence after the entropy encoder depends on decisions before and after the current match. 
+
 ## Optimal Parser
+
+The optimal parser attempts to generate the best possible sequence of matches, considering the limitations of inaccurate cost model. The optimal parser scans the input and generates the list of all possible matches. Next, it scans the list of matches backwards and calculates the best possible distance and path for each byte in the input stream. The dynamic programming algorithm makes the match selection an O(n) algorithm, but the main cost of the scan is the search for matches for each byte in the stream. It is possible to improve the performance of the optimal parser by splitting the input into segments with little loss of correctnes, but this feature is still not implementd. The optimal parser is not always better than the traditional look-ahead parser because of cost-model limitations.  
 
 # Encoder
 
