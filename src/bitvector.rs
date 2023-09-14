@@ -48,9 +48,12 @@ impl Bitvector {
 
     /// Set all of the bits above 'keep' to zero.
     pub fn clear_upper_bits(bits: u64, keep: usize) -> u64 {
+        if keep == 0 {
+            return 0;
+        }
         let amt: u32 = (64 - keep) as u32;
-        let shl = bits.checked_shl(amt).unwrap_or(0);
-        shl.checked_shr(amt).unwrap_or(0)
+        let shl = bits.overflowing_shl(amt).0;
+        shl.overflowing_shr(amt).0
     }
 
     /// Push the lowest 'len' bits from 'bits'. The bits are inserted into the
