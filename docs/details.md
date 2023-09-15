@@ -4,16 +4,17 @@ This page describes the techniques and the design decisions made in this project
 
 # Overall structure
 
-The compressor has a few components, that are described in detail below. This
+The compressor has a few components that are described in detail below. This
 section describes the data-compression pipeline and how the pieces fit together.
 
+### The compression pipeline
 The input is split into large chunks that are compressed independently. The
 maximum size of each chunk is 4GB, to allow the use of 32bit indices within each
 chunk. Each chunk is wrapped with a header that includes a length a magic
 signature. Individual transformations can further split chunks into smaller
 chunks.
 
-The phase of compression is the matcher. The matcher is responsible for
+The first phase of compression is matching. The matcher is responsible for
 splitting the input stream into a sequence of packets that describe a region of
 literals, followed by a reference to a sequence of bytes from earlier in the
 file. Every packet returns the two sequences (literal region and match region),
@@ -55,6 +56,27 @@ Finally the four streams are concatenated together. It is possible to accelerate
 the encoding and decoding stream by interleaving the encoding of regions into
 multiple parallel streams but this is not currently implemented.
 
+### Compression levels
+
+There are different parameters in the compressor that control the performance of
+the compressor and the trade-off between compression time and the size of the
+output. Some of the parameters are:
+
+* The number of entries in the matcher cache.
+* The number of ways in the matcher cache.
+* The parser look-ahead value.
+* The matcher search window.
+
+The compression levels (1 to 9) need to represent a trade-off between
+compression speed and the size of the compressed binary. Finding the
+configuration for each one of the levels is done by enumerating all of the
+possibilities and eliminating the points that are dominated by other points.  A
+point dominates other point if it has both compression time and compression size
+values.
+
+This chart shows the dominating points from which we can select the compression levels.
+![Pareto](pareto.svg)
+
 # Matcher
 
 The matcher is responsible for iterating over the input and return a sequence of
@@ -86,17 +108,18 @@ of length X is found, the cache module starts looking at index X+1, to quickly
 disqualify the match, instead of scanning from the first byte of the match
 string.
 
-## Parser
+## Look-ahead Parser
 
-THe parser is responsible for selecting the right matches between multiple
-candidates, while minimizing compression time. Selecting a match may preclude
-the possibility of selecting a longer match that may start one or two bytes
-later. It is not practical to scan all possible combinations, and the parser
-needs to rely on heuristics and skip some combinations.
+The parser is responsible for selecting the best match from several possible
+candidates, while minimizing compression time and reducing the output size.
+Selecting a specific match may preclude the possibility of selecting a longer
+match that may start one or two bytes later. It's not practical to scan all
+possible combinations so the parser needs to rely on heuristics and skip some
+combinations.
 
-The parser uses a look-ahead feature that compares the current match to the next
+Our parser uses a look-ahead feature that compares the current match to the next
 few matches that start at the following bytes. The number of bytes to look ahead
-depends on the comprssion level. To select the best match the parser calculates
+depends on the compression level. To select the best match the parser calculates
 the cost of the literals that will be emitted if a further match will be
 selected, the location of the end of the match, and the offset to the match
 destination (longer matches take more bytes to encode).
