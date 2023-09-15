@@ -171,6 +171,20 @@ We use Yann's
 method to spread the symbols in the state list. The encoder and decoder
 use the state list to create the encoding and decoding tables.
 
+Our implementation has an interesting optimization in the decoding phase. After
+encoding (or decoding a symbol) the state needs to return to the valid range.
+This can be done using the following loop, one bit at a time. But we pre-compute
+the number of bits that need to be emitted and use a lookup table.
+
+```
+ // Slow loop to bring the state to the valid range (F .. 2 * F).
+ while state >= max_state {
+  // Push the lowest bit to the bitvector.
+  bv.push_word(state, 1);
+  state /= 2;
+ }
+```
+
 The histogram is a table that assigns a value to each letter in the alphabet.
 Our configuration contains 4096 states, so the normalized histogram often
 contains values that are greater than 255. We serialize the histogram by
