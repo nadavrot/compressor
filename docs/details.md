@@ -52,6 +52,13 @@ offset-length values. Notice that we don’t save the upper bit of the binary
 number in the extra-bits buffer, because it always has to be equal to one,
 otherwise we would have made the number shorter.
 
+| Stream      | Compression method |
+| ----------- | ----------- |
+| Literals        | Entropy encoded (0..255) |
+| Literal Lengths | Entropy encoded (0..255) |
+| Match Lengths   | Entropy encoded (0..255) |
+| Offset Length   | Extra-bit stream, entropy encoded tokens (0..24) |
+
 Finally the four streams are concatenated together. It is possible to accelerate
 the encoding and decoding stream by interleaving the encoding of regions into
 multiple parallel streams but this is not currently implemented.
@@ -168,8 +175,8 @@ The histogram is a table that assigns a value to each letter in the alphabet.
 Our configuration contains 4096 states, so the normalized histogram often
 contains values that are greater than 255. We serialize the histogram by
 encoding symbol values over 255 with a sequence of 255-byes that are accumulated
-into the final value. This is also the method that LZ4 uses to encode lengths,
-and is effective.
+into the final value. This is also the method that LZ4 uses to encode lengths.
+It's very effective because there are usually few values above 256.
 
 The encoder is used to compress the literal stream, the match and literal
 lengths, and the tokens that represent the offset bit-width. The token-list and
