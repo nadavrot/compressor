@@ -1,14 +1,17 @@
 # Compressor
 
-**Compressor** is an implementation of a modern lossless compressor that uses LZ
-matching and entropy coding (Finite State Entropy). The compressor is able to
-achieve compression rates that are similar to gzip, zstandard and lzfse.  The
+**Compressor** is an educational implementation of a modern lossless compressor.
+The compressor itself is fast and effective, and in fact can outperform gzip in
+both compression size and speed. But the code is minimal and easy to follow.
+The compressor uses modern LZ matching techniques and entropy coding. The
 compressor is written in safe rust without external dependencies. The code is
 written in a clear way for educational purposes.
 
-The matcher in this project has a non-trivial look-ahead parser, and uses a
+The matcher in this project has a look-ahead parser, and uses a
 multi-way cache. The Finite State Entropy encoder is similar to the encoders
 used by zstd and lzfse.
+
+The technical details are [explained here](docs/details.md).
 
 ## Benchmark
 
