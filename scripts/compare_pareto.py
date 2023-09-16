@@ -16,7 +16,7 @@ def run(cmd, output=tmp_file):
      start = time.time()
      subprocess.run(cmd, shell=True)
      end = time.time()
-     size = os.path.getsize(output)
+     size = float(os.path.getsize(output))/(1024*1024)
      os.unlink(output)
      return (end - start, size)
 
@@ -30,11 +30,12 @@ def measure(cmd_pattern, csv_pattern, input_file, output_file, levels):
     print(csv_pattern % res)
 
 
-print("time, lz4, gzip, zstd, cli, lzfse, bzip2, cli-stream")
-measure("lz4 -c %s -%d  > %s", "%f, %s,,,,,", input_file, tmp_file,(1,10))
-measure("gzip -c %s -%d  > %s", "%f,,%s,,,,", input_file, tmp_file,(1,10))
-measure("zstd --single-thread -c %s -%d  > %s", "%f,,,%s,,,", input_file, tmp_file,(1,10))
-measure("cli %s --level %d -o %s", "%f,,,,%s,,", input_file, tmp_file,(1,10))
+print("time, this, this(stream), lz4, zstd, lzfse, gzip, bzip2, xz")
+measure("cli %s --level %d -o %s", "%f,%s", input_file, tmp_file,(1,10))
+measure("cli %s --level %d -o %s --mode lz4", "%f,,%s", input_file, tmp_file,(1,11))
+measure("lz4 -c %s -%d  > %s", "%f,,,%s", input_file, tmp_file,(1,10))
+measure("zstd --single-thread -c %s -%d  > %s", "%f,,,,%s", input_file, tmp_file,(1,22))
 measure("lzfse -encode -i %s -o %s", "%f,,,,,%s,", input_file, tmp_file, None)
-measure("bzip2 -c %s -%d  > %s", "%f,,,,,,%s", input_file, tmp_file,(1,10))
-measure("cli %s --level %d -o %s --mode lz4", "%f,,,,,,,%s", input_file, tmp_file,(1,10))
+measure("gzip -c %s -%d  > %s", "%f,,,,,,%s", input_file, tmp_file,(1,10))
+measure("bzip2 -c %s -%d  > %s", "%f,,,,,,,%s", input_file, tmp_file,(1,10))
+measure("xz -c %s -%d  > %s", "%f,,,,,,,,%s", input_file, tmp_file,(1,10))
