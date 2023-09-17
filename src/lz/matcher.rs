@@ -91,15 +91,21 @@ impl<
         len
     }
 
-    /// Return a match to a previous string that matches a string that starts at
-    /// 'idx'. The value 'prev_best' is the length of a previous match. Don't
-    /// bother finding matches that are shorter than this value.
-    fn get_match(&self, idx: usize, mut prev_best: usize) -> Range<usize> {
-        let dic_idx = self.get_match_candidate(idx);
+    /// Return a match to a previous string that's equal to the string that
+    /// starts at 'idx'. The value 'prev_best' is the length of some previous
+    /// match. Don't bother finding matches that are shorter than this value.
+    /// 'cache_key' is the index to the bank way to search.
+    fn get_match(
+        &self,
+        idx: usize,
+        mut prev_best: usize,
+        cache_key: usize,
+    ) -> Range<usize> {
+        debug_assert_eq!(cache_key, self.get_match_candidate(idx));
         let mut best = 0..0;
 
         for i in 0..DICT_BANKS {
-            let loc = self.dict[dic_idx * DICT_BANKS + i];
+            let loc = self.dict[cache_key * DICT_BANKS + i];
             // Ignore empty cells.
             if loc == EMPTY_CELL {
                 break;
@@ -130,12 +136,14 @@ impl<
     fn get_match_candidate(&self, idx: usize) -> usize {
         Self::hash_to_index(self.get_bytes_at(idx))
     }
-    /// Save the value at index 'idx' to the LRU dictionary.
-    fn save_match(&mut self, idx: usize) {
-        let dic_idx = self.get_match_candidate(idx);
+    /// Save the value at index 'idx' to cache entry at 'cache_key' and rotate
+    /// the entries in the cache.
+    fn save_match(&mut self, idx: usize, cache_key: usize) {
+        debug_assert_eq!(cache_key, self.get_match_candidate(idx));
+
         // This is an LRU cache. Move the old entries to make room to the new
         // entry.
-        let base = dic_idx * DICT_BANKS;
+        let base = cache_key * DICT_BANKS;
         for i in (0..DICT_BANKS - 1).rev() {
             self.dict[base + (i + 1)] = self.dict[base + (i)];
         }
@@ -229,7 +237,8 @@ impl<
                     debug_assert!(self.cursor <= can.3);
                     // When accepting a match, hash the content of the match.
                     for i in self.cursor..(can.3).min(input_len - MIN_MATCH) {
-                        self.dict.save_match(i);
+                        let cache_key = self.dict.get_match_candidate(i);
+                        self.dict.save_match(i, cache_key);
                     }
                     self.cursor = can.3;
                     let mut lit = can.0.clone();
@@ -246,8 +255,9 @@ impl<
             }
 
             // Check if there is a previous match and save the hash.
-            let mat = self.dict.get_match(self.cursor, prev);
-            self.dict.save_match(self.cursor);
+            let cache_key = self.dict.get_match_candidate(self.cursor);
+            let mat = self.dict.get_match(self.cursor, prev, cache_key);
+            self.dict.save_match(self.cursor, cache_key);
 
             if mat.is_empty() {
                 // We didn't find a match. Grow the literal region and move on.
@@ -378,8 +388,9 @@ impl<
         // First, collect all of the matches for all of the input.
         for cursor in 0..input_len - MIN_MATCH {
             // Check if there is a previous match, and save the hash.
-            let mat = dict.get_match(cursor, 0);
-            dict.save_match(cursor);
+            let cache_key = dict.get_match_candidate(cursor);
+            let mat = dict.get_match(cursor, 0, cache_key);
+            dict.save_match(cursor, cache_key);
             all_matches.push(mat);
         }
         for _ in 0..MIN_MATCH {
