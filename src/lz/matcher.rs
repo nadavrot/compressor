@@ -226,7 +226,7 @@ impl<
             // If we've exceeded the window, return the candidate.
             if let Some(can) = &candidate {
                 if self.cursor >= can.2 + PARSE_SEARCH {
-                    debug_assert!(self.cursor < can.3);
+                    debug_assert!(self.cursor <= can.3);
                     // When accepting a match, hash the content of the match.
                     for i in self.cursor..(can.3).min(input_len - MIN_MATCH) {
                         self.dict.save_match(i);
