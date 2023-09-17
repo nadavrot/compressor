@@ -14,16 +14,16 @@ impl<const BINS: usize> Histogram<BINS> {
         let mut hist3 = [0; BINS];
 
         let mut i = 0;
-        while i+3 < values.len() {
+        while i + 3 < values.len() {
             hist0[Into::into(values[i])] += 1;
-            hist1[Into::into(values[i+1])] += 1;
-            hist2[Into::into(values[i+2])] += 1;
-            hist3[Into::into(values[i+3])] += 1;
-            i+=4;
+            hist1[Into::into(values[i + 1])] += 1;
+            hist2[Into::into(values[i + 2])] += 1;
+            hist3[Into::into(values[i + 3])] += 1;
+            i += 4;
         }
         while i < values.len() {
             hist0[Into::into(values[i])] += 1;
-            i+=1;
+            i += 1;
         }
 
         let mut hist = [0; BINS];
