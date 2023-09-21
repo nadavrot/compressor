@@ -7,6 +7,7 @@ pub mod signatures {
     pub const NOP_ENC: [u8; 2] = [0x90, 0x90];
     pub const SIMPLE_ENC: [u8; 2] = [0x12, 34];
     pub const BLOCK_SIG: [u8; 2] = [0x13, 45];
+    pub const ARITH_SIG: [u8; 2] = [0x01, 10];
     pub const PAGER_SIG: [u8; 4] = [0x9a, 0x93, 0x9a, 0x93];
     pub const START_PAGE_SIG: [u8; 2] = [0x71, 75];
     pub const FULL_SIG: [u8; 4] = [0x10, 0x14, 0x82, 0x35];
