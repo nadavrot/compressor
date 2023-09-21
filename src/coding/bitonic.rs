@@ -184,3 +184,74 @@ fn test_encoder_decoder_array() {
         assert_eq!(res, test_vector);
     }
 }
+
+/// A simple predictor for the probability of the next bit.
+pub struct Model<const CONTEXT_SIZE_BITS: usize, const LIMIT: usize> {
+    cache: Vec<(u16, u16)>,
+}
+
+impl<const CTX_SIZE_BITS: usize, const LIMIT: usize>
+    Model<CTX_SIZE_BITS, LIMIT>
+{
+    pub fn new() -> Self {
+        Self {
+            cache: vec![(1, 1); 1 << CTX_SIZE_BITS],
+        }
+    }
+
+    /// Return a probability prediction in the 16-bit range using the
+    /// 'CTX_SIZE_BITS' LSB bits in 'ctx'.
+    pub fn predict(&self, ctx: u64) -> u16 {
+        let key = ctx % (1 << CTX_SIZE_BITS);
+        let (set, cnt) = self.cache[key as usize];
+        ((set as u64 * (1 << 16)) / (1 + cnt as u64)) as u16
+    }
+
+    /// Update the probability of the context 'ctx', considering the first
+    /// 'CTX_SIZE_BITS' LSB bits, with the bit 'bit'.
+    pub fn update(&mut self, ctx: u64, bit: u16) {
+        let key = ctx % (1 << CTX_SIZE_BITS);
+        let (set, cnt) = &mut self.cache[key as usize];
+        *cnt += 1;
+        *set += bit & 1;
+        if *cnt as usize >= LIMIT {
+            // Add one to prevent division by zero.
+            *set /= 2;
+            *cnt /= 2;
+        }
+    }
+}
+
+#[test]
+fn test_simple_model() {
+    {
+        let mut model = Model::<7, 1024>::new();
+        for _ in 0..10000 {
+            model.update(0, 1);
+            model.update(0, 0);
+        }
+        // The prediction needs to be close to the mid point.
+        let pred = model.predict(0);
+        assert!(pred > 32_300 && pred < 32_999);
+    }
+
+    {
+        let mut model = Model::<7, 256>::new();
+        for _ in 0..10000 {
+            model.update(0, 0);
+        }
+        // The prediction needs to be close to zero.
+        let pred = model.predict(0);
+        assert_eq!(pred, 0);
+    }
+
+    {
+        let mut model = Model::<7, 256>::new();
+        for _ in 0..10000 {
+            model.update(0, 1);
+        }
+        // The prediction needs to be close to one.
+        let pred = model.predict(0);
+        assert!(pred > 65_000);
+    }
+}
