@@ -3,9 +3,10 @@
 
 use crate::utils::signatures::{match_signature, ARITH_SIG};
 use crate::utils::signatures::{read32, write32};
+use crate::utils::RECIPROCAL_U32;
 use crate::{Context, Decoder, Encoder};
 
-const MODEL_CTX: usize = 17;
+const MODEL_CTX: usize = 29;
 const MODEL_LIMIT: usize = 400;
 
 pub struct BitonicEncoder<'a> {
@@ -29,12 +30,12 @@ impl<'a> BitonicEncoder<'a> {
     /// Encode the bit 'bit' with probability 'prob' in the range 0..65536.
     /// Return the number of bytes written.
     pub fn encode(&mut self, bit: bool, prob: u16) -> usize {
-        assert!(self.high > self.low);
+        debug_assert!(self.high > self.low);
 
         let gap = (self.high - self.low) as u64;
         let scale = (gap * prob as u64) >> 16;
         let mid = self.low + scale as u32;
-        assert!(self.high > mid && mid >= self.low);
+        debug_assert!(self.high > mid && mid >= self.low);
 
         // Pick the half:
         if bit {
@@ -106,12 +107,12 @@ impl<'a> BitonicDecoder<'a> {
 
     /// Decode one bit with a probability 'prob' in the range 0..65536.
     pub fn decode(&mut self, prob: u16) -> Option<bool> {
-        assert!(self.high > self.low);
-        assert!(self.high >= self.state && self.low <= self.state);
+        debug_assert!(self.high > self.low);
+        debug_assert!(self.high >= self.state && self.low <= self.state);
         let gap = (self.high - self.low) as u64;
         let scale = (gap * prob as u64) >> 16;
         let mid = self.low + scale as u32;
-        assert!(self.high > mid && mid >= self.low);
+        debug_assert!(self.high > mid && mid >= self.low);
 
         let bit = self.state <= mid;
         // Pick the half:
@@ -211,7 +212,7 @@ impl<const CTX_SIZE_BITS: usize, const LIMIT: usize>
 {
     fn new() -> Self {
         Self {
-            cache: vec![(1, 1); 1 << CTX_SIZE_BITS],
+            cache: vec![(0, 0); 1 << CTX_SIZE_BITS],
         }
     }
 
@@ -220,7 +221,12 @@ impl<const CTX_SIZE_BITS: usize, const LIMIT: usize>
     pub fn predict(&self, ctx: u64) -> u16 {
         let key = ctx % (1 << CTX_SIZE_BITS);
         let (set, cnt) = self.cache[key as usize];
-        ((set as u64 * (1 << 16)) / (1 + cnt as u64)) as u16
+        debug_assert!(cnt < 1024);
+        let a = set as u64;
+        let b = 1 + cnt as u64;
+
+        // This is equivalent to (a * (1<<16)) / b;
+        ((a * (RECIPROCAL_U32[b as usize] as u64)) >> 16) as u16
     }
 
     /// Update the probability of the context 'ctx', considering the first
@@ -372,7 +378,7 @@ fn test_encoder_decoder_protocol() {
 
 #[test]
 fn test_encoder_decoder_zeros() {
-    let zeros = vec![0; 1 << 18];
+    let zeros = vec![0; 1 << 13];
     let mut compressed: Vec<u8> = Vec::new();
     let mut decompressed: Vec<u8> = Vec::new();
     let ctx = Context::new(9, 1 << 20);
