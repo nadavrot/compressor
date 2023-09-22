@@ -212,7 +212,7 @@ impl<const CTX_SIZE_BITS: usize, const LIMIT: usize>
 {
     fn new() -> Self {
         Self {
-            cache: vec![(0, 0); 1 << CTX_SIZE_BITS],
+            cache: vec![(1, 1); 1 << CTX_SIZE_BITS],
         }
     }
 
