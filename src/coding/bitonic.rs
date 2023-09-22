@@ -5,6 +5,9 @@ use crate::utils::signatures::{match_signature, ARITH_SIG};
 use crate::utils::signatures::{read32, write32};
 use crate::{Context, Decoder, Encoder};
 
+const MODEL_CTX: usize = 17;
+const MODEL_LIMIT: usize = 400;
+
 pub struct BitonicEncoder<'a> {
     /// The output bitstream.
     output: &'a mut Vec<u8>,
@@ -296,7 +299,7 @@ impl<'a> Encoder<'a> for ArithmeticEncoder<'a> {
         let mut wrote = ARITH_SIG.len() + 4;
 
         let mut encoder = BitonicEncoder::new(self.output);
-        let mut model = Model::<16, 65530>::new();
+        let mut model = Model::<MODEL_CTX, MODEL_LIMIT>::new();
         let mut ctx: u64 = 0;
 
         for b in self.input {
@@ -335,7 +338,7 @@ impl<'a> Decoder<'a> for ArithmeticDecoder<'a> {
 
         let stream = &self.input[cursor..];
         let mut decoder = BitonicDecoder::new(stream);
-        let mut model = Model::<16, 65530>::new();
+        let mut model = Model::<MODEL_CTX, MODEL_LIMIT>::new();
         let mut ctx: u64 = 0;
         let mut wrote = 0;
         for _ in 0..length {
@@ -365,4 +368,16 @@ fn test_encoder_decoder_protocol() {
     let _ = ArithmeticEncoder::new(text, &mut compressed, ctx).encode();
     let _ = ArithmeticDecoder::new(&compressed, &mut decompressed).decode();
     assert_eq!(text, decompressed);
+}
+
+#[test]
+fn test_encoder_decoder_zeros() {
+    let zeros = vec![0; 1 << 18];
+    let mut compressed: Vec<u8> = Vec::new();
+    let mut decompressed: Vec<u8> = Vec::new();
+    let ctx = Context::new(9, 1 << 20);
+
+    let _ = ArithmeticEncoder::new(&zeros, &mut compressed, ctx).encode();
+    let _ = ArithmeticDecoder::new(&compressed, &mut decompressed).decode();
+    assert_eq!(zeros, decompressed);
 }
