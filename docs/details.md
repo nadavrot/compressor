@@ -1,6 +1,7 @@
 # Technical details
 
-This page describes the techniques and the design decisions made in this project.
+This page describes the techniques and the design decisions made in this
+project.
 
 # Overall structure
 
@@ -81,7 +82,8 @@ possibilities and eliminating the points that are dominated by other points.  A
 point dominates other point if it has both compression time and compression size
 values.
 
-This chart shows the dominating points from which we can select the compression levels.
+This chart shows the dominating points from which we can select the compression
+levels.
 ![Pareto](pareto.svg)
 
 # Matcher
@@ -205,3 +207,30 @@ The buffer that contains all of the literals is split into small chunks
 encoder to have sharper histograms.  This happens when two different parts of
 the file have a different distribution of values.
 
+# Adaptive Arithmetic Encoder
+
+The adaptive arithmetic encoder is an an alternative to the entropy encoder.
+While the entropy encoder scans the input and creates a histogram which it later
+transmits to the decoder, the adaptive arithmetic encoder creates a list of
+probabilities on the fly. The encoder uses a model to make a prediction on the
+probability of the next bit. Accurate probabilities allow the bitonic arithmetic
+encoder to encode bits efficiently and result in a high compression ratio.
+Matt Mahoney describes this [here](https://mattmahoney.net/dc/dce.html#Section_412).
+This technique is very slow, because the encoder encodes one bit at a time, and
+consumes lots of memory, because making accurate predictions requires keeping
+the summary of many examples. This method is considered adaptive because the
+prediction changes over time. At first the prediction is built from zero with
+the first examples in the input, and later on new data washes out the old data
+and updates the prediction tables.
+
+## Model
+
+The model that's used in the adaptive arithmetic encoder is very simple. A
+context which represents the last 'n' bits of input is used as a key to a large
+array. Each entry in the array holds the number of 1s in the input, and the
+total number of bits seen so far. The probability is calculated as the number of
+1s divided by the number of bits seen, with special handling of the zero case.
+For example, when encoding the 5th bit in the bit stream '...11011', the first 4
+bits are used as context, which is a key to the history array. This entry
+records all of the previous patterns that started with '1101' and the counts for
+the next bit.
