@@ -2,7 +2,8 @@
 //! into chunks and calls the block compressor.
 
 use crate::block::{BlockDecoder, BlockEncoder};
-use crate::coding::bitonic::{ArithmeticDecoder, ArithmeticEncoder};
+use crate::coding::bitonic::AdaptiveArithmeticDecoder as AAD;
+use crate::coding::bitonic::AdaptiveArithmeticEncoder as AAE;
 use crate::nop::{NopDecoder, NopEncoder};
 use crate::pager::{PagerDecoder, PagerEncoder};
 use crate::utils::signatures::{match_signature, ARITH_SIG, FULL_SIG};
@@ -61,8 +62,7 @@ impl<'a> Encoder<'a> for FullEncoder<'a> {
     fn encode(&mut self) -> usize {
         self.output.extend(FULL_SIG);
         if self.ctx.level == 13 {
-            let mut encoder =
-                ArithmeticEncoder::new(self.input, self.output, self.ctx);
+            let mut encoder = AAE::new(self.input, self.output, self.ctx);
             return FULL_SIG.len() + encoder.encode();
         }
 
@@ -85,7 +85,7 @@ impl<'a> Decoder<'a> for FullDecoder<'a> {
         let buffer = &self.input[FULL_SIG.len()..];
 
         if match_signature(buffer, &ARITH_SIG) {
-            let mut decoder = ArithmeticDecoder::new(buffer, self.output);
+            let mut decoder = AAD::new(buffer, self.output);
             let (read, written) = decoder.decode()?;
             return Some((read + ARITH_SIG.len() + FULL_SIG.len(), written));
         }

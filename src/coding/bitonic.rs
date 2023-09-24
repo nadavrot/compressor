@@ -1,6 +1,6 @@
 //! This module implements an arithmetic code such as the one in zpaq, and
 //! described by Matt Mahoney: https://mattmahoney.net/dc/dce.html#Section_32
-
+//! and in the book Managing Gigabytes by Witten, Moffat and Bell, section 2.4.
 use crate::utils::signatures::{match_signature, ARITH_SIG};
 use crate::utils::signatures::{read32, write32};
 use crate::utils::RECIPROCAL_U32;
@@ -9,6 +9,8 @@ use crate::{Context, Decoder, Encoder};
 const MODEL_CTX: usize = 29;
 const MODEL_LIMIT: usize = 400;
 
+/// An arithmetic encoder that encodes one bit at a time, with a given
+/// probability expressed as a 16-bit integer.
 pub struct BitonicEncoder<'a> {
     /// The output bitstream.
     output: &'a mut Vec<u8>,
@@ -32,12 +34,13 @@ impl<'a> BitonicEncoder<'a> {
     pub fn encode(&mut self, bit: bool, prob: u16) -> usize {
         debug_assert!(self.high > self.low);
 
+        // Figure out the mid point of the range, depending on the probability.
         let gap = (self.high - self.low) as u64;
         let scale = (gap * prob as u64) >> 16;
         let mid = self.low + scale as u32;
         debug_assert!(self.high > mid && mid >= self.low);
 
-        // Pick the half:
+        // Select the sub-range based on the bit.
         if bit {
             self.high = mid;
         } else {
@@ -55,10 +58,13 @@ impl<'a> BitonicEncoder<'a> {
         wrote
     }
 
+    /// Seal the stream by flushing the state.
     pub fn finalize(&mut self) -> usize {
+        // Encode a zero-probability token which flushes the state.
         self.encode(true, 0)
     }
 
+    /// Only use this method for testing.
     pub fn encode_array(&mut self, vals: &[bool], prob: &[u16]) {
         assert_eq!(vals.len(), prob.len());
         for i in 0..vals.len() {
@@ -68,6 +74,8 @@ impl<'a> BitonicEncoder<'a> {
     }
 }
 
+/// An arithmetic decoder that decodes one bit at a time, with a given
+/// probability expressed as a 16-bit integer. See 'BitonicEncoder' for details.
 pub struct BitonicDecoder<'a> {
     /// The input bit stream (read from the beginning).
     input: &'a [u8],
@@ -109,13 +117,18 @@ impl<'a> BitonicDecoder<'a> {
     pub fn decode(&mut self, prob: u16) -> Option<bool> {
         debug_assert!(self.high > self.low);
         debug_assert!(self.high >= self.state && self.low <= self.state);
+
+        // Figure out the mid point of the range, depending on the probability.
         let gap = (self.high - self.low) as u64;
         let scale = (gap * prob as u64) >> 16;
         let mid = self.low + scale as u32;
         debug_assert!(self.high > mid && mid >= self.low);
 
+        // Figure out which bit we extract based on where the state falls in the
+        // range.
         let bit = self.state <= mid;
-        // Pick the half:
+
+        // Select the sub-range based on the bit.
         if bit {
             self.high = mid;
         } else {
@@ -137,6 +150,7 @@ impl<'a> BitonicDecoder<'a> {
         Some(bit)
     }
 
+    /// Only use this method for testing.
     pub fn decode_array(&mut self, prob: &[u16]) -> Option<Vec<bool>> {
         let mut res = Vec::new();
         for &p in prob {
@@ -202,7 +216,9 @@ fn test_encoder_decoder_array() {
     }
 }
 
-/// A simple predictor for the probability of the next bit.
+/// A simple model that predicts the probability of the next bit.
+/// CONTEXT_SIZE_BITS defines the size of the cache (history).
+/// LIMIT defines the maximum number of samples for bucket.
 pub struct Model<const CONTEXT_SIZE_BITS: usize, const LIMIT: usize> {
     cache: Vec<(u16, u16)>,
 }
@@ -236,8 +252,9 @@ impl<const CTX_SIZE_BITS: usize, const LIMIT: usize>
         let (set, cnt) = &mut self.cache[key as usize];
         *cnt += 1;
         *set += (bit & 1) as u16;
+        // Normalize the count if LIMIT is exceeded. This allows new data to
+        // have a higher weight.
         if *cnt as usize >= LIMIT {
-            // Add one to prevent division by zero.
             *set /= 2;
             *cnt /= 2;
         }
@@ -278,25 +295,28 @@ fn test_simple_model() {
     }
 }
 
-/// A bitonic encoder.
-pub struct ArithmeticEncoder<'a> {
+/// Adaptive Arithmetic Encoder. The encoder predicts the probability of the
+/// next bit and uses an arithmetic encoder to compress the data based on the
+/// prediction. The higher the accuracy of the prediction the higher the
+/// compression rate.
+pub struct AdaptiveArithmeticEncoder<'a> {
     /// The uncompressed input.
     input: &'a [u8],
     /// The output stream.
     output: &'a mut Vec<u8>,
 }
 
-/// A simple tANS decoder.
-pub struct ArithmeticDecoder<'a> {
+/// Adaptive Arithmetic Decoder. See AdaptiveArithmeticEncoder for details.
+pub struct AdaptiveArithmeticDecoder<'a> {
     /// The uncompressed input.
     input: &'a [u8],
     /// The output stream.
     output: &'a mut Vec<u8>,
 }
 
-impl<'a> Encoder<'a> for ArithmeticEncoder<'a> {
+impl<'a> Encoder<'a> for AdaptiveArithmeticEncoder<'a> {
     fn new(input: &'a [u8], output: &'a mut Vec<u8>, _ctx: Context) -> Self {
-        ArithmeticEncoder { input, output }
+        AdaptiveArithmeticEncoder { input, output }
     }
 
     fn encode(&mut self) -> usize {
@@ -308,15 +328,16 @@ impl<'a> Encoder<'a> for ArithmeticEncoder<'a> {
         let mut model = Model::<MODEL_CTX, MODEL_LIMIT>::new();
         let mut ctx: u64 = 0;
 
+        // For each byte:
         for b in self.input {
-            let b = *b;
+            // For each bit:
             for j in 0..8 {
                 let bit = (b >> (7 - j)) & 0x1;
-
+                // Make a prediction, decode a bit, and update the model.
                 let p = model.predict(ctx);
                 wrote += encoder.encode(bit != 0, p);
                 model.update(ctx, bit);
-
+                // Update the context.
                 ctx = (ctx << 1) + bit as u64;
             }
         }
@@ -325,35 +346,41 @@ impl<'a> Encoder<'a> for ArithmeticEncoder<'a> {
     }
 }
 
-impl<'a> Decoder<'a> for ArithmeticDecoder<'a> {
+impl<'a> Decoder<'a> for AdaptiveArithmeticDecoder<'a> {
     fn new(input: &'a [u8], output: &'a mut Vec<u8>) -> Self {
-        ArithmeticDecoder { input, output }
+        AdaptiveArithmeticDecoder { input, output }
     }
 
     fn decode(&mut self) -> Option<(usize, usize)> {
         let mut cursor = 0;
-        // Read the part signature.
+        // Check the signature.
         if !match_signature(self.input, &ARITH_SIG) {
             return None;
         }
         cursor += ARITH_SIG.len();
 
-        // Read the part length.
+        // Read the length part.
         let length = read32(&self.input[cursor..])? as usize;
         cursor += 4;
-
         let stream = &self.input[cursor..];
+
         let mut decoder = BitonicDecoder::new(stream);
         let mut model = Model::<MODEL_CTX, MODEL_LIMIT>::new();
+
         let mut ctx: u64 = 0;
         let mut wrote = 0;
+        // For each byte:
         for _ in 0..length {
             let mut byte: u8 = 0;
+            // For each bit:
             for _ in 0..8 {
+                // Make a prediction, decode a bit, and update the model.
                 let p = model.predict(ctx);
                 let bit = decoder.decode(p)?;
                 model.update(ctx, bit as u8);
+                // Save the bit.
                 byte = (byte << 1) + bit as u8;
+                // Update the context.
                 ctx = (ctx << 1) + bit as u64;
             }
             self.output.push(byte);
@@ -367,23 +394,23 @@ impl<'a> Decoder<'a> for ArithmeticDecoder<'a> {
 fn test_encoder_decoder_protocol() {
     let text = "this is a message. this is a message.  this is a message.";
     let text = text.as_bytes();
-    let mut compressed: Vec<u8> = Vec::new();
-    let mut decompressed: Vec<u8> = Vec::new();
+    let mut comp: Vec<u8> = Vec::new();
+    let mut decomp: Vec<u8> = Vec::new();
     let ctx = Context::new(9, 1 << 20);
 
-    let _ = ArithmeticEncoder::new(text, &mut compressed, ctx).encode();
-    let _ = ArithmeticDecoder::new(&compressed, &mut decompressed).decode();
-    assert_eq!(text, decompressed);
+    let _ = AdaptiveArithmeticEncoder::new(text, &mut comp, ctx).encode();
+    let _ = AdaptiveArithmeticDecoder::new(&comp, &mut decomp).decode();
+    assert_eq!(text, decomp);
 }
 
 #[test]
 fn test_encoder_decoder_zeros() {
     let zeros = vec![0; 1 << 13];
-    let mut compressed: Vec<u8> = Vec::new();
-    let mut decompressed: Vec<u8> = Vec::new();
+    let mut comp: Vec<u8> = Vec::new();
+    let mut decomp: Vec<u8> = Vec::new();
     let ctx = Context::new(9, 1 << 20);
 
-    let _ = ArithmeticEncoder::new(&zeros, &mut compressed, ctx).encode();
-    let _ = ArithmeticDecoder::new(&compressed, &mut decompressed).decode();
-    assert_eq!(zeros, decompressed);
+    let _ = AdaptiveArithmeticEncoder::new(&zeros, &mut comp, ctx).encode();
+    let _ = AdaptiveArithmeticDecoder::new(&comp, &mut decomp).decode();
+    assert_eq!(zeros, decomp);
 }
