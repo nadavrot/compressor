@@ -1,10 +1,10 @@
-use compressor::coding::simple::{SimpleDecoder, SimpleEncoder};
+use compressor::coding::simple::{EntropyDecoder, EntropyEncoder};
 use compressor::Encoder;
 use compressor::{Context, Decoder};
 use rand_distr::Distribution;
 
-type EncoderTy<'a> = SimpleEncoder<'a, 256, 4096>;
-type DecoderTy<'a> = SimpleDecoder<'a, 256, 4096>;
+type EncoderTy<'a> = EntropyEncoder<'a, 256, 4096>;
+type DecoderTy<'a> = EntropyDecoder<'a, 256, 4096>;
 
 #[test]
 fn test_round_trip_simple_encoder() {
@@ -36,7 +36,7 @@ fn round_trip(input: &[u8]) {
 
     let mut decompressed = Vec::new();
     let mut decoder =
-        SimpleDecoder::<256, 4096>::new(&compressed, &mut decompressed);
+        EntropyDecoder::<256, 4096>::new(&compressed, &mut decompressed);
     let (consumed, decompressed_size) = decoder.decode().unwrap();
     assert_eq!(compressed.len(), consumed);
     assert_eq!(decompressed.len(), decompressed_size);

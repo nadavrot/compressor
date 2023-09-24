@@ -3,7 +3,7 @@
 //! and entropy encoding.
 
 use crate::bitvector::Bitvector;
-use crate::coding::simple::{SimpleDecoder, SimpleEncoder};
+use crate::coding::simple::{EntropyDecoder, EntropyEncoder};
 use crate::lz::matcher::select_matcher;
 use crate::nop::{NopDecoder, NopEncoder};
 use crate::pager::{
@@ -81,9 +81,9 @@ fn encode_offset_entropy<const SYMS: usize>(
     input: &[u8],
     ctx: Context,
 ) -> Vec<u8> {
-    let mut encoded: Vec<u8> = Vec::new();
-    let _ = SimpleEncoder::<SYMS, 4096>::new(input, &mut encoded, ctx).encode();
-    encoded
+    let mut coded: Vec<u8> = Vec::new();
+    let _ = EntropyEncoder::<SYMS, 4096>::new(input, &mut coded, ctx).encode();
+    coded
 }
 
 // Decode the entropy encoding of a list of valid tokens.
@@ -91,7 +91,7 @@ fn decode_offset_entropy<const SYMS: usize>(
     input: &[u8],
 ) -> Option<(usize, Vec<u8>)> {
     let mut decoded: Vec<u8> = Vec::new();
-    let mut decoder = SimpleDecoder::<SYMS, 4096>::new(input, &mut decoded);
+    let mut decoder = EntropyDecoder::<SYMS, 4096>::new(input, &mut decoded);
     let (read, _) = decoder.decode()?;
     Some((read, decoded))
 }
@@ -99,7 +99,7 @@ fn decode_offset_entropy<const SYMS: usize>(
 //. Try to perform entropy encoding, but if it fails use nop encoding.
 fn ent_or_nop(input: &[u8], ctx: Context) -> Vec<u8> {
     let mut encoded: Vec<u8> = Vec::new();
-    type EncoderTy<'a> = SimpleEncoder<'a, 256, 4096>;
+    type EncoderTy<'a> = EntropyEncoder<'a, 256, 4096>;
     let new_size = EncoderTy::new(input, &mut encoded, ctx).encode();
 
     if new_size < input.len() {
@@ -114,7 +114,7 @@ fn ent_or_nop(input: &[u8], ctx: Context) -> Vec<u8> {
 fn decode_ent_or_nop(input: &[u8]) -> Option<(usize, Vec<u8>)> {
     let mut decoded: Vec<u8> = Vec::new();
 
-    type DecoderTy<'a> = SimpleDecoder<'a, 256, 4096>;
+    type DecoderTy<'a> = EntropyDecoder<'a, 256, 4096>;
     if let Some((read, _)) = DecoderTy::new(input, &mut decoded).decode() {
         return Some((read, decoded));
     }

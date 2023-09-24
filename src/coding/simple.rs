@@ -1,4 +1,4 @@
-//! A module that implements a simple tANS entropy encoder.
+//! A module that implements a tANS entropy encoder. The
 
 use crate::bitvector::Bitvector;
 use crate::coding::hist::{num_bits, Histogram};
@@ -237,8 +237,9 @@ impl<const ALPHABET: usize, const TABLESIZE: usize> Coder<ALPHABET, TABLESIZE> {
     }
 }
 
-/// A simple tANS encoder.
-pub struct SimpleEncoder<'a, const ALPHABET: usize, const TABLESIZE: usize> {
+/// An entropy encoder (FiniteStateEntropy). This is a tANS entropy encoder.
+/// It is similar to FSE and gives similar compression rates.
+pub struct EntropyEncoder<'a, const ALPHABET: usize, const TABLESIZE: usize> {
     /// The uncompressed input.
     input: &'a [u8],
     /// The output stream.
@@ -248,7 +249,7 @@ pub struct SimpleEncoder<'a, const ALPHABET: usize, const TABLESIZE: usize> {
 }
 
 impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
-    SimpleEncoder<'a, ALPHABET, TABLESIZE>
+    EntropyEncoder<'a, ALPHABET, TABLESIZE>
 {
     /// Encode the input into the bitvector using the calculated metadata.
     fn encode_data(&mut self, input: &[u8], bv: &mut Bitvector) {
@@ -307,8 +308,8 @@ impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
     }
 }
 
-/// A simple tANS decoder.
-pub struct SimpleDecoder<'a, const ALPHABET: usize, const TABLESIZE: usize> {
+/// An entropy decoder. See 'EntropyDecoder'.
+pub struct EntropyDecoder<'a, const ALPHABET: usize, const TABLESIZE: usize> {
     /// The uncompressed input.
     input: &'a [u8],
     /// The output stream.
@@ -319,7 +320,7 @@ pub struct SimpleDecoder<'a, const ALPHABET: usize, const TABLESIZE: usize> {
 
 /// Serialization methods.
 impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
-    SimpleDecoder<'a, ALPHABET, TABLESIZE>
+    EntropyDecoder<'a, ALPHABET, TABLESIZE>
 {
     /// Try to decode the input, and return the number of bytes read and written
     /// if the encoding was a valid encoding.
@@ -344,7 +345,7 @@ impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
 
 /// Compression logic methods.
 impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
-    SimpleDecoder<'a, ALPHABET, TABLESIZE>
+    EntropyDecoder<'a, ALPHABET, TABLESIZE>
 {
     // Extract a single character from the bitstream.
     #[must_use]
@@ -400,10 +401,10 @@ impl<'a, const ALPHABET: usize, const TABLESIZE: usize>
 }
 
 impl<'a, const ALPHABET: usize, const TABLESIZE: usize> Encoder<'a>
-    for SimpleEncoder<'a, ALPHABET, TABLESIZE>
+    for EntropyEncoder<'a, ALPHABET, TABLESIZE>
 {
     fn new(input: &'a [u8], output: &'a mut Vec<u8>, _ctx: Context) -> Self {
-        SimpleEncoder {
+        EntropyEncoder {
             input,
             output,
             coder: Coder::new(),
@@ -416,10 +417,10 @@ impl<'a, const ALPHABET: usize, const TABLESIZE: usize> Encoder<'a>
 }
 
 impl<'a, const ALPHABET: usize, const TABLESIZE: usize> Decoder<'a>
-    for SimpleDecoder<'a, ALPHABET, TABLESIZE>
+    for EntropyDecoder<'a, ALPHABET, TABLESIZE>
 {
     fn new(input: &'a [u8], output: &'a mut Vec<u8>) -> Self {
-        SimpleDecoder {
+        EntropyDecoder {
             input,
             output,
             coder: Coder::new(),
