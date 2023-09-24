@@ -1,4 +1,4 @@
-use compressor::coding::simple::{EntropyDecoder, EntropyEncoder};
+use compressor::coding::entropy::{EntropyDecoder, EntropyEncoder};
 use compressor::Encoder;
 use compressor::{Context, Decoder};
 use rand_distr::Distribution;

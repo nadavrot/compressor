@@ -3,7 +3,7 @@
 //! and entropy encoding.
 
 use crate::bitvector::Bitvector;
-use crate::coding::simple::{EntropyDecoder, EntropyEncoder};
+use crate::coding::entropy::{EntropyDecoder, EntropyEncoder};
 use crate::lz::matcher::select_matcher;
 use crate::nop::{NopDecoder, NopEncoder};
 use crate::pager::{
