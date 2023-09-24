@@ -1,5 +1,5 @@
 //! A collection of modules that implement entropy encoding.
 
-pub mod bitonic;
+pub mod adaptive;
 pub mod hist;
 pub mod simple;

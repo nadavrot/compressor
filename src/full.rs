@@ -2,8 +2,8 @@
 //! into chunks and calls the block compressor.
 
 use crate::block::{BlockDecoder, BlockEncoder};
-use crate::coding::bitonic::AdaptiveArithmeticDecoder as AAD;
-use crate::coding::bitonic::AdaptiveArithmeticEncoder as AAE;
+use crate::coding::adaptive::AdaptiveArithmeticDecoder as AAD;
+use crate::coding::adaptive::AdaptiveArithmeticEncoder as AAE;
 use crate::nop::{NopDecoder, NopEncoder};
 use crate::pager::{PagerDecoder, PagerEncoder};
 use crate::utils::signatures::{match_signature, ARITH_SIG, FULL_SIG};
