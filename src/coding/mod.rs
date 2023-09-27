@@ -3,3 +3,4 @@
 pub mod adaptive;
 pub mod entropy;
 pub mod hist;
+pub mod models;
