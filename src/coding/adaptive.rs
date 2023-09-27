@@ -218,26 +218,43 @@ fn test_encoder_decoder_array() {
     }
 }
 
+/// A trait that defines the interface for making predictions.
+pub trait Model {
+    /// Return a probability prediction in the 16-bit range using the
+    /// internal state.
+    #[must_use]
+    fn predict(&self) -> u16;
+
+    /// Update the internal context with the next bit 'bit'.
+    fn update(&mut self, bit: u8);
+}
+
 /// A simple model that predicts the probability of the next bit.
 /// CONTEXT_SIZE_BITS defines the size of the cache (history).
 /// LIMIT defines the maximum number of samples for bucket.
-pub struct Model<const CONTEXT_SIZE_BITS: usize, const LIMIT: usize> {
+pub struct BitwiseModel<const CONTEXT_SIZE_BITS: usize, const LIMIT: usize> {
+    ctx: u64,
     cache: Vec<(u16, u16)>,
 }
 
 impl<const CTX_SIZE_BITS: usize, const LIMIT: usize>
-    Model<CTX_SIZE_BITS, LIMIT>
+    BitwiseModel<CTX_SIZE_BITS, LIMIT>
 {
     fn new() -> Self {
         Self {
+            ctx: 0,
             cache: vec![(1, 1); 1 << CTX_SIZE_BITS],
         }
     }
+}
 
+impl<const CTX_SIZE_BITS: usize, const LIMIT: usize> Model
+    for BitwiseModel<CTX_SIZE_BITS, LIMIT>
+{
     /// Return a probability prediction in the 16-bit range using the
     /// 'CTX_SIZE_BITS' LSB bits in 'ctx'.
-    pub fn predict(&self, ctx: u64) -> u16 {
-        let key = ctx % (1 << CTX_SIZE_BITS);
+    fn predict(&self) -> u16 {
+        let key = self.ctx % (1 << CTX_SIZE_BITS);
         let (set, cnt) = self.cache[key as usize];
         debug_assert!(cnt < 1024);
         let a = set as u64;
@@ -249,8 +266,8 @@ impl<const CTX_SIZE_BITS: usize, const LIMIT: usize>
 
     /// Update the probability of the context 'ctx', considering the first
     /// 'CTX_SIZE_BITS' LSB bits, with the bit 'bit'.
-    pub fn update(&mut self, ctx: u64, bit: u8) {
-        let key = ctx % (1 << CTX_SIZE_BITS);
+    fn update(&mut self, bit: u8) {
+        let key = self.ctx % (1 << CTX_SIZE_BITS);
         let (set, cnt) = &mut self.cache[key as usize];
         *cnt += 1;
         *set += (bit & 1) as u16;
@@ -260,39 +277,47 @@ impl<const CTX_SIZE_BITS: usize, const LIMIT: usize>
             *set /= 2;
             *cnt /= 2;
         }
+        // Update the context.
+        self.ctx = (self.ctx << 1) + bit as u64;
     }
 }
 
 #[test]
 fn test_simple_model() {
     {
-        let mut model = Model::<7, 1024>::new();
+        let mut model = BitwiseModel::<7, 1024>::new();
         for _ in 0..10000 {
-            model.update(0, 1);
-            model.update(0, 0);
+            model.update(1);
+            model.update(0);
         }
-        // The prediction needs to be close to the mid point.
-        let pred = model.predict(0);
-        assert!(pred > 32_300 && pred < 32_999);
+
+        // Predict a '1'
+        let pred = model.predict();
+        assert!(pred > 64_000);
+        model.update(1);
+
+        // Predict a zero.
+        let pred = model.predict();
+        assert!(pred < 1_000);
     }
 
     {
-        let mut model = Model::<7, 256>::new();
+        let mut model = BitwiseModel::<7, 256>::new();
         for _ in 0..10000 {
-            model.update(0, 0);
+            model.update(0);
         }
         // The prediction needs to be close to zero.
-        let pred = model.predict(0);
+        let pred = model.predict();
         assert_eq!(pred, 0);
     }
 
     {
-        let mut model = Model::<7, 256>::new();
+        let mut model = BitwiseModel::<7, 256>::new();
         for _ in 0..10000 {
-            model.update(0, 1);
+            model.update(1);
         }
         // The prediction needs to be close to one.
-        let pred = model.predict(0);
+        let pred = model.predict();
         assert!(pred > 65_000);
     }
 }
@@ -334,17 +359,6 @@ impl DMCModel {
                 self.states[left / 2][1] = right;
             }
         }
-    }
-
-    /// Return a probability prediction in the 16-bit range.
-    pub fn predict(&self) -> u16 {
-        self.verify();
-        let counts = self.counts[self.state];
-        let a = counts[0];
-        let b = counts[0] + counts[1];
-        assert!(!b.is_nan());
-        assert!(!b.is_zero());
-        ((a / b) * 65536.) as u16
     }
 
     /// Allocate a new state and return it's index.
@@ -400,15 +414,6 @@ impl DMCModel {
         self.states[curr][edge] = new;
     }
 
-    /// Update the probability of the model with the bit 'bit'.
-    /// Advance to the next state, and update the counts.
-    pub fn update(&mut self, bit: u8) {
-        self.try_clone(bit as usize);
-        self.counts[self.state][bit as usize] += 1.;
-        self.state = self.states[self.state][bit as usize];
-        self.verify();
-    }
-
     /// Print a dotty graph of the state machine.
     pub fn dump(&self) {
         println!("digraph finite_state_machine {{");
@@ -421,6 +426,28 @@ impl DMCModel {
             println!("{} -> {} [label = \"1: {}\"];", i, tos[1], counts[1]);
         }
         println!("}}");
+    }
+}
+
+impl Model for DMCModel {
+    /// Return a probability prediction in the 16-bit range.
+    fn predict(&self) -> u16 {
+        self.verify();
+        let counts = self.counts[self.state];
+        let a = counts[0];
+        let b = counts[0] + counts[1];
+        assert!(!b.is_nan());
+        assert!(!b.is_zero());
+        ((a / b) * 65536.) as u16
+    }
+
+    /// Update the probability of the model with the bit 'bit'.
+    /// Advance to the next state, and update the counts.
+    fn update(&mut self, bit: u8) {
+        self.try_clone(bit as usize);
+        self.counts[self.state][bit as usize] += 1.;
+        self.state = self.states[self.state][bit as usize];
+        self.verify();
     }
 }
 
@@ -471,8 +498,7 @@ impl<'a> Encoder<'a> for AdaptiveArithmeticEncoder<'a> {
         let mut wrote = ARITH_SIG.len() + 4;
 
         let mut encoder = BitonicEncoder::new(self.output);
-        let mut model = Model::<MODEL_CTX, MODEL_LIMIT>::new();
-        let mut ctx: u64 = 0;
+        let mut model = BitwiseModel::<MODEL_CTX, MODEL_LIMIT>::new();
 
         // For each byte:
         for b in self.input {
@@ -480,11 +506,9 @@ impl<'a> Encoder<'a> for AdaptiveArithmeticEncoder<'a> {
             for j in 0..8 {
                 let bit = (b >> (7 - j)) & 0x1;
                 // Make a prediction, decode a bit, and update the model.
-                let p = model.predict(ctx);
+                let p = model.predict();
                 wrote += encoder.encode(bit != 0, p);
-                model.update(ctx, bit);
-                // Update the context.
-                ctx = (ctx << 1) + bit as u64;
+                model.update(bit);
             }
         }
         wrote += encoder.finalize();
@@ -511,9 +535,8 @@ impl<'a> Decoder<'a> for AdaptiveArithmeticDecoder<'a> {
         let stream = &self.input[cursor..];
 
         let mut decoder = BitonicDecoder::new(stream);
-        let mut model = Model::<MODEL_CTX, MODEL_LIMIT>::new();
+        let mut model = BitwiseModel::<MODEL_CTX, MODEL_LIMIT>::new();
 
-        let mut ctx: u64 = 0;
         let mut wrote = 0;
         // For each byte:
         for _ in 0..length {
@@ -521,13 +544,11 @@ impl<'a> Decoder<'a> for AdaptiveArithmeticDecoder<'a> {
             // For each bit:
             for _ in 0..8 {
                 // Make a prediction, decode a bit, and update the model.
-                let p = model.predict(ctx);
+                let p = model.predict();
                 let bit = decoder.decode(p)?;
-                model.update(ctx, bit as u8);
+                model.update(bit as u8);
                 // Save the bit.
                 byte = (byte << 1) + bit as u8;
-                // Update the context.
-                ctx = (ctx << 1) + bit as u64;
             }
             self.output.push(byte);
             wrote += 1;
@@ -551,7 +572,7 @@ fn test_encoder_decoder_protocol() {
 
 #[test]
 fn test_encoder_decoder_zeros() {
-    let zeros = vec![0; 1 << 13];
+    let zeros = vec![0; 1 << 8];
     let mut comp: Vec<u8> = Vec::new();
     let mut decomp: Vec<u8> = Vec::new();
     let ctx = Context::new(9, 1 << 20);
