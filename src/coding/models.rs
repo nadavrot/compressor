@@ -215,7 +215,7 @@ impl Model for DMCModel {
     fn predict(&self) -> u16 {
         self.verify();
         let counts = self.counts[self.state];
-        let a = counts[0];
+        let a = counts[1];
         let b = counts[0] + counts[1];
         assert!(b.is_normal());
         ((a / b) * 65536.) as u16
@@ -233,7 +233,7 @@ impl Model for DMCModel {
 
 #[test]
 fn test_dmc_dump() {
-    let text = "this is a message. this is"; // a message.  this is a message.";
+    let text = "this is a message. this is a message.  this is a message.";
     let text = text.as_bytes();
     let mut model = DMCModel::new();
 
@@ -246,4 +246,48 @@ fn test_dmc_dump() {
         }
     }
     model.dump();
+}
+
+#[test]
+fn dmc_zeros() {
+    let mut model = DMCModel::new();
+
+    for _ in 0..(1 << 13) {
+        model.update(0);
+    }
+
+    let p = model.predict();
+    model.update(0);
+
+    // Very high probability that this is a zero.
+    assert!(p < 10);
+}
+
+#[test]
+fn dmc_pattern() {
+    let mut model = DMCModel::new();
+
+    // Train a pattern.
+    for _ in 0..2000 {
+        model.update(0);
+        model.update(1);
+        model.update(1);
+        model.update(0);
+    }
+
+    // Check that we can predict it.
+    let p1 = model.predict();
+    model.update(0);
+    let p2 = model.predict();
+    model.update(1);
+    let p3 = model.predict();
+    model.update(1);
+    let p4 = model.predict();
+    model.update(0);
+
+    // Detect the pattern 0110.
+    assert!(p1 < 10);
+    assert!(p2 > 65_000);
+    assert!(p3 > 65_000);
+    assert!(p4 < 10);
 }
