@@ -6,7 +6,7 @@ use crate::utils::signatures::{match_signature, ARITH_SIG};
 use crate::utils::signatures::{read32, write32};
 use crate::{Context, Decoder, Encoder};
 
-use super::models::{BitwiseModel, Model, DMCModel};
+use super::models::{DMCModel, Model};
 
 const MODEL_CTX: usize = 29;
 const MODEL_LIMIT: usize = 400;

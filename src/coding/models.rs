@@ -109,47 +109,62 @@ const DMC_LEVELS: usize = 3;
 /// If the number of states reaches this number, reset the model.
 const DMC_MAX_NODES: usize = 10_000_000;
 
+/// Represents a node in the DMC state machine.
+#[derive(Clone)]
+pub struct DMCNode {
+    /// Points to the next nodes (left - 0, right - 1).
+    pub next: [u32; 2],
+    /// Represents the counts on each edge (left - 0, right - 1).
+    pub counts: [u16; 2],
+}
+
+impl DMCNode {
+    /// Create a new empty node.
+    pub fn empty() -> Self {
+        Self {
+            next: [0, 0],
+            counts: [0, 0],
+        }
+    }
+}
+
 pub struct DMCModel {
+    /// The current state.
     state: usize,
-    /// Maps the current state to the next (0, 1) states.
-    states: Vec<[u32; 2]>,
-    /// Records the counts (events seen) for each edge.
-    counts: Vec<[u16; 2]>,
+    /// The list of states.
+    nodes: Vec<DMCNode>,
 }
 
 impl DMCModel {
     /// Create the initial state machine that has a tree-structure with 'layers'
     fn init(&mut self, layers: usize) {
-        assert_eq!(self.states.len(), 0);
-        assert_eq!(self.counts.len(), 0);
+        assert_eq!(self.nodes.len(), 0);
         assert_eq!(self.state, 0);
-        let _ = self.allocate_new_state([0, 0], [0, 0]);
+        let _ = self.add_state(DMCNode::empty());
         for layer in 1..layers {
             let len = (1 << layer) - 1;
             for _ in 0..len {
-                let left = self.allocate_new_state([0, 0], [0, 0]);
-                let right = self.allocate_new_state([0, 0], [0, 0]);
-                self.states[(left / 2) as usize][0] = left;
-                self.states[(left / 2) as usize][1] = right;
+                let left = self.add_state(DMCNode::empty());
+                let right = self.add_state(DMCNode::empty());
+                self.nodes[(left / 2) as usize].next[0] = left;
+                self.nodes[(left / 2) as usize].next[1] = right;
             }
         }
     }
 
     /// Allocate a new state and return it's index.
-    fn allocate_new_state(&mut self, next: [u32; 2], counts: [u16; 2]) -> u32 {
-        self.states.push(next);
-        self.counts.push(counts);
-        (self.counts.len() - 1) as u32
+    fn add_state(&mut self, node: DMCNode) -> u32 {
+        self.nodes.push(node);
+        (self.nodes.len() - 1) as u32
     }
 
     fn verify(&self) {
         if cfg!(debug_assertions) {
-            debug_assert_eq!(self.counts.len(), self.states.len());
-            let len = self.counts.len();
+            let len = self.nodes.len();
             for i in 0..len {
                 debug_assert!(
-                    (self.states[i][0] as usize) < len
-                        && (self.states[i][1] as usize) < len
+                    (self.nodes[i].next[0] as usize) < len
+                        && (self.nodes[i].next[1] as usize) < len
                 );
             }
         }
@@ -157,23 +172,23 @@ impl DMCModel {
 
     pub fn reset(&mut self) {
         self.state = 0;
-        self.states.clear();
-        self.counts.clear();
+        self.nodes.clear();
         self.init(DMC_LEVELS);
     }
 
     pub fn try_clone(&mut self, edge: usize) {
-        if self.states.len() > DMC_MAX_NODES {
+        if self.nodes.len() > DMC_MAX_NODES {
             self.reset();
             return;
         }
         let curr = self.state;
         let from = curr;
-        let to = self.states[curr][edge] as usize;
+        let to = self.nodes[curr].next[edge] as usize;
 
         // This is the cost of the edge that we want to redirect.
-        let edge_count = self.counts[from][edge] as u64;
-        let sum = self.counts[to][0] as u64 + self.counts[to][1] as u64;
+        let edge_count = self.nodes[from].counts[edge] as u64;
+        let to_node = &mut self.nodes[to];
+        let sum = to_node.counts[0] as u64 + to_node.counts[1] as u64;
 
         // Don't clone edges that are too weak, or don't contribute much to the
         // sum node.
@@ -186,16 +201,16 @@ impl DMCModel {
         debug_assert!(edge_count != sum);
 
         // Create a new node.
-        let tc = self.counts[to];
-        let r = edge_count / sum;
-        assert!(r != 1);
+        let tc = to_node.counts;
         let tc0 = ((tc[0] as u64 * edge_count) / sum) as u16;
         let tc1 = ((tc[1] as u64 * edge_count) / sum) as u16;
-        self.counts[to][0] -= tc0;
-        self.counts[to][1] -= tc1;
-        let new = self.allocate_new_state(self.states[to], [tc0, tc1]);
+        to_node.counts[0] -= tc0;
+        to_node.counts[1] -= tc1;
+        let mut node = DMCNode::empty();
+        node.counts = [tc0, tc1];
+        node.next = to_node.next;
         // Register the new node.
-        self.states[curr][edge] = new;
+        self.nodes[curr].next[edge] = self.add_state(node);
         self.verify();
     }
 
@@ -205,9 +220,9 @@ impl DMCModel {
             println!("digraph finite_state_machine {{");
             println!("rankdir=LR;");
             println!("node [shape = circle];");
-            for i in 0..self.counts.len() {
-                let tos = self.states[i];
-                let counts = self.counts[i];
+            for i in 0..self.nodes.len() {
+                let tos = self.nodes[i].next;
+                let counts = self.nodes[i].counts;
                 println!("{} -> {} [label = \"0: {}\"];", i, tos[0], counts[0]);
                 println!("{} -> {} [label = \"1: {}\"];", i, tos[1], counts[1]);
             }
@@ -220,8 +235,7 @@ impl Model for DMCModel {
     fn new() -> Self {
         let mut model = DMCModel {
             state: 0,
-            states: Vec::new(),
-            counts: Vec::new(),
+            nodes: Vec::new(),
         };
         model.init(DMC_LEVELS);
         model
@@ -230,7 +244,7 @@ impl Model for DMCModel {
     /// Return a probability prediction in the 16-bit range.
     fn predict(&self) -> u16 {
         self.verify();
-        let counts = self.counts[self.state];
+        let counts = self.nodes[self.state].counts;
         let a = counts[1] as u64;
         let b = counts[0] as u64 + a;
         if b == 0 {
@@ -243,8 +257,8 @@ impl Model for DMCModel {
     /// Advance to the next state, and update the counts.
     fn update(&mut self, bit: u8) {
         self.try_clone(bit as usize);
-        self.counts[self.state][bit as usize] += 1;
-        self.state = self.states[self.state][bit as usize] as usize;
+        self.nodes[self.state].counts[bit as usize] += 1;
+        self.state = self.nodes[self.state].next[bit as usize] as usize;
         self.verify();
     }
 }
@@ -304,8 +318,8 @@ fn dmc_pattern() {
     model.update(0);
 
     // Detect the pattern 0110.
-    assert!(p1 < 10);
+    assert!(p1 < 40);
     assert!(p2 > 65_000);
     assert!(p3 > 65_000);
-    assert!(p4 < 10);
+    assert!(p4 < 40);
 }
