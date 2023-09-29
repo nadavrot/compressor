@@ -111,7 +111,7 @@ pub struct DMCModel {
     /// Maps the current state to the next (0, 1) states.
     states: Vec<[usize; 2]>,
     /// Records the counts (events seen) for each edge.
-    counts: Vec<[f32; 2]>,
+    counts: Vec<[u16; 2]>,
 }
 
 impl DMCModel {
@@ -120,12 +120,12 @@ impl DMCModel {
         assert_eq!(self.states.len(), 0);
         assert_eq!(self.counts.len(), 0);
         assert_eq!(self.state, 0);
-        let _ = self.allocate_new_state([0, 0], [0.1, 0.1]);
+        let _ = self.allocate_new_state([0, 0], [0, 0]);
         for layer in 1..layers {
             let len = (1 << layer) - 1;
             for _ in 0..len {
-                let left = self.allocate_new_state([0, 0], [0.1, 0.1]);
-                let right = self.allocate_new_state([0, 0], [0.1, 0.1]);
+                let left = self.allocate_new_state([0, 0], [0, 0]);
+                let right = self.allocate_new_state([0, 0], [0, 0]);
                 self.states[left / 2][0] = left;
                 self.states[left / 2][1] = right;
             }
@@ -136,7 +136,7 @@ impl DMCModel {
     fn allocate_new_state(
         &mut self,
         next: [usize; 2],
-        counts: [f32; 2],
+        counts: [u16; 2],
     ) -> usize {
         self.states.push(next);
         self.counts.push(counts);
@@ -144,13 +144,13 @@ impl DMCModel {
     }
 
     fn verify(&self) {
-        let len = self.counts.len();
-        for i in 0..len {
-            let t0 = self.counts[i][0];
-            let t1 = self.counts[i][1];
-            assert!(t0.is_normal());
-            assert!(t1.is_normal());
-            assert!(self.states[i][0] < len && self.states[i][1] < len);
+        if cfg!(debug_assertions) {
+            let len = self.counts.len();
+            for i in 0..len {
+                debug_assert!(
+                    self.states[i][0] < len && self.states[i][1] < len
+                );
+            }
         }
     }
 
@@ -160,43 +160,47 @@ impl DMCModel {
         let to = self.states[curr][edge];
 
         // This is the cost of the edge that we want to redirect.
-        let edge_count = self.counts[from][edge];
-        let sum = self.counts[to][0] + self.counts[to][1];
+        let edge_count = self.counts[from][edge] as u64;
+        let sum = self.counts[to][0] as u64 + self.counts[to][1] as u64;
 
-        // Early exit good edges.
-        if edge_count < 2. || sum <= 2. + edge_count {
+        // Don't clone edges that are too weak, or don't contribute much to the
+        // sum node.
+        if edge_count < 4 || sum < edge_count * 2 {
             return;
         }
 
-        assert!(edge_count != 0.);
-        assert!(sum != 0.);
+        assert!(edge_count != 0);
+        assert!(sum != 0);
         assert!(edge_count != sum);
 
         // Create a new node.
         let tc = self.counts[to];
         let r = edge_count / sum;
-        assert!(r != 1.0);
-        let tc0 = tc[0] * r;
-        let tc1 = tc[1] * r;
+        assert!(r != 1);
+        let tc0 = ((tc[0] as u64 * edge_count) / sum) as u16;
+        let tc1 = ((tc[1] as u64 * edge_count) / sum) as u16;
         self.counts[to][0] -= tc0;
         self.counts[to][1] -= tc1;
         let new = self.allocate_new_state(self.states[to], [tc0, tc1]);
         // Register the new node.
         self.states[curr][edge] = new;
+        self.verify();
     }
 
     /// Print a dotty graph of the state machine.
     pub fn dump(&self) {
-        println!("digraph finite_state_machine {{");
-        println!("rankdir=LR;");
-        println!("node [shape = circle];");
-        for i in 0..self.counts.len() {
-            let tos = self.states[i];
-            let counts = self.counts[i];
-            println!("{} -> {} [label = \"0: {}\"];", i, tos[0], counts[0]);
-            println!("{} -> {} [label = \"1: {}\"];", i, tos[1], counts[1]);
+        if cfg!(debug_assertions) {
+            println!("digraph finite_state_machine {{");
+            println!("rankdir=LR;");
+            println!("node [shape = circle];");
+            for i in 0..self.counts.len() {
+                let tos = self.states[i];
+                let counts = self.counts[i];
+                println!("{} -> {} [label = \"0: {}\"];", i, tos[0], counts[0]);
+                println!("{} -> {} [label = \"1: {}\"];", i, tos[1], counts[1]);
+            }
+            println!("}}");
         }
-        println!("}}");
     }
 }
 
@@ -215,17 +219,19 @@ impl Model for DMCModel {
     fn predict(&self) -> u16 {
         self.verify();
         let counts = self.counts[self.state];
-        let a = counts[1];
-        let b = counts[0] + counts[1];
-        assert!(b.is_normal());
-        ((a / b) * 65536.) as u16
+        let a = counts[1] as u64;
+        let b = counts[0] as u64 + a;
+        if b == 0 {
+            return 1 << 15;
+        }
+        ((a * 65535) / b) as u16
     }
 
     /// Update the probability of the model with the bit 'bit'.
     /// Advance to the next state, and update the counts.
     fn update(&mut self, bit: u8) {
         self.try_clone(bit as usize);
-        self.counts[self.state][bit as usize] += 1.;
+        self.counts[self.state][bit as usize] += 1;
         self.state = self.states[self.state][bit as usize];
         self.verify();
     }
