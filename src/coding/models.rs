@@ -103,8 +103,11 @@ fn test_simple_model() {
     }
 }
 
-/// Start with context of 4 bits.
-const DMC_LEVELS: usize = 4;
+/// Start with context of n bits.
+const DMC_LEVELS: usize = 3;
+
+/// If the number of states reaches this number, reset the model.
+const DMC_MAX_NODES: usize = 10_000_000;
 
 pub struct DMCModel {
     state: usize,
@@ -145,6 +148,7 @@ impl DMCModel {
 
     fn verify(&self) {
         if cfg!(debug_assertions) {
+            debug_assert_eq!(self.counts.len(), self.states.len());
             let len = self.counts.len();
             for i in 0..len {
                 debug_assert!(
@@ -154,7 +158,18 @@ impl DMCModel {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.state = 0;
+        self.states.clear();
+        self.counts.clear();
+        self.init(DMC_LEVELS);
+    }
+
     pub fn try_clone(&mut self, edge: usize) {
+        if self.states.len() > DMC_MAX_NODES {
+            self.reset();
+            return;
+        }
         let curr = self.state;
         let from = curr;
         let to = self.states[curr][edge];
@@ -165,13 +180,13 @@ impl DMCModel {
 
         // Don't clone edges that are too weak, or don't contribute much to the
         // sum node.
-        if edge_count < 4 || sum < edge_count * 2 {
+        if edge_count < 16 || sum  < edge_count * 2 {
             return;
         }
 
-        assert!(edge_count != 0);
-        assert!(sum != 0);
-        assert!(edge_count != sum);
+        debug_assert!(edge_count != 0);
+        debug_assert!(sum != 0);
+        debug_assert!(edge_count != sum);
 
         // Create a new node.
         let tc = self.counts[to];
