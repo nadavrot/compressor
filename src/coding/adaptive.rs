@@ -6,7 +6,7 @@ use crate::utils::signatures::{match_signature, ARITH_SIG};
 use crate::utils::signatures::{read32, write32};
 use crate::{Context, Decoder, Encoder};
 
-use super::models::{BitwiseModel, Model};
+use super::models::{BitwiseModel, Model, DMCModel};
 
 const MODEL_CTX: usize = 29;
 const MODEL_LIMIT: usize = 400;
@@ -248,7 +248,7 @@ impl<'a> Encoder<'a> for AdaptiveArithmeticEncoder<'a> {
         let mut wrote = ARITH_SIG.len() + 4;
 
         let mut encoder = BitonicEncoder::new(self.output);
-        let mut model = BitwiseModel::<MODEL_CTX, MODEL_LIMIT>::new();
+        let mut model = DMCModel::new();
 
         // For each byte:
         for b in self.input {
@@ -285,7 +285,7 @@ impl<'a> Decoder<'a> for AdaptiveArithmeticDecoder<'a> {
         let stream = &self.input[cursor..];
 
         let mut decoder = BitonicDecoder::new(stream);
-        let mut model = BitwiseModel::<MODEL_CTX, MODEL_LIMIT>::new();
+        let mut model = DMCModel::new();
 
         let mut wrote = 0;
         // For each byte:
