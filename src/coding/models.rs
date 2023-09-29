@@ -112,7 +112,7 @@ const DMC_MAX_NODES: usize = 10_000_000;
 pub struct DMCModel {
     state: usize,
     /// Maps the current state to the next (0, 1) states.
-    states: Vec<[usize; 2]>,
+    states: Vec<[u32; 2]>,
     /// Records the counts (events seen) for each edge.
     counts: Vec<[u16; 2]>,
 }
@@ -129,21 +129,17 @@ impl DMCModel {
             for _ in 0..len {
                 let left = self.allocate_new_state([0, 0], [0, 0]);
                 let right = self.allocate_new_state([0, 0], [0, 0]);
-                self.states[left / 2][0] = left;
-                self.states[left / 2][1] = right;
+                self.states[(left / 2) as usize][0] = left;
+                self.states[(left / 2) as usize][1] = right;
             }
         }
     }
 
     /// Allocate a new state and return it's index.
-    fn allocate_new_state(
-        &mut self,
-        next: [usize; 2],
-        counts: [u16; 2],
-    ) -> usize {
+    fn allocate_new_state(&mut self, next: [u32; 2], counts: [u16; 2]) -> u32 {
         self.states.push(next);
         self.counts.push(counts);
-        self.counts.len() - 1
+        (self.counts.len() - 1) as u32
     }
 
     fn verify(&self) {
@@ -152,7 +148,8 @@ impl DMCModel {
             let len = self.counts.len();
             for i in 0..len {
                 debug_assert!(
-                    self.states[i][0] < len && self.states[i][1] < len
+                    (self.states[i][0] as usize) < len
+                        && (self.states[i][1] as usize) < len
                 );
             }
         }
@@ -172,7 +169,7 @@ impl DMCModel {
         }
         let curr = self.state;
         let from = curr;
-        let to = self.states[curr][edge];
+        let to = self.states[curr][edge] as usize;
 
         // This is the cost of the edge that we want to redirect.
         let edge_count = self.counts[from][edge] as u64;
@@ -180,7 +177,7 @@ impl DMCModel {
 
         // Don't clone edges that are too weak, or don't contribute much to the
         // sum node.
-        if edge_count < 16 || sum  < edge_count * 2 {
+        if edge_count < 16 || sum < edge_count * 2 {
             return;
         }
 
@@ -247,7 +244,7 @@ impl Model for DMCModel {
     fn update(&mut self, bit: u8) {
         self.try_clone(bit as usize);
         self.counts[self.state][bit as usize] += 1;
-        self.state = self.states[self.state][bit as usize];
+        self.state = self.states[self.state][bit as usize] as usize;
         self.verify();
     }
 }
