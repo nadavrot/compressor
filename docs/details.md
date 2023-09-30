@@ -223,14 +223,32 @@ prediction changes over time. At first the prediction is built from zero with
 the first examples in the input, and later on new data washes out the old data
 and updates the prediction tables.
 
-## Model
+## Models
 
-The model that's used in the adaptive arithmetic encoder is very simple. A
-context which represents the last 'n' bits of input is used as a key to a large
-array. Each entry in the array holds the number of 1s in the input, and the
-total number of bits seen so far. The probability is calculated as the number of
-1s divided by the number of bits seen, with special handling of the zero case.
-For example, when encoding the 5th bit in the bit stream '...11011', the first 4
-bits are used as context, which is a key to the history array. This entry
-records all of the previous patterns that started with '1101' and the counts for
-the next bit.
+The adaptive arithmetic encoder can use one of two models: Bitonic and DMC. Both
+of the models try to predict the probability of the next bit, to allow the
+arithmetic encoder to encode the input stream with fewer bits.
+
+### Bitonic
+The Bitonic model is relatively simple. The input stream is a sequence of bits.
+The last 'n' bits of input are considered the prediction context and are used to
+predict the next bit.  The context bits are used as a key to a large array. Each
+entry in the array holds the number of 1s in the input, and the total number of
+bits seen so far. The probability is calculated as the number of 1s divided by
+the number of bits seen, with special handling of the zero case.  For example,
+when encoding the 5th bit in the bit stream '...1101?', the first 4 bits are
+used as context, which is a key to the history array. This entry records all of
+the previous patterns that started with '1101' and the counts for the next bit.
+The context is used to predict the 5th bit.
+
+### DMC: Dynamic Markov Compression
+
+The DMC model uses a state machine to predict the probability of the next bit.
+The algorithm is explained very well in the book Managing Gigabytes by Witten,
+Moffat and Bell, section 2.5, page 70. The algorithm builds a state machine
+where each transition between states, for the 1s and 0s, records the number of
+times the edge was taken. As the input stream is processed the index moves
+between the states. If an edge becomes too frequently visited the target node is
+split, to allow the model to learn a longer context.
+
+![DMC](dmc.svg)
