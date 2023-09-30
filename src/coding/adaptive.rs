@@ -3,7 +3,7 @@
 //! and in the book Managing Gigabytes by Witten, Moffat and Bell, section 2.4.
 
 use crate::models::dmc::DMCModel;
-use crate::models::model::Model;
+use crate::models::Model;
 
 use crate::utils::signatures::{match_signature, ARITH_SIG};
 use crate::utils::signatures::{read32, write32};

@@ -1,4 +1,9 @@
-use super::model::Model;
+//! This module implements the Dynamic Markov compression, that uses a state
+//! machine to predict the next bit in the sequence. The algorithm is explained
+//! very well in the book Managing Gigabytes by Witten, Moffat and Bell,
+//! section 2.5, page 70.
+
+use super::Model;
 
 /// Start with context of n bits.
 const DMC_LEVELS: usize = 3;
@@ -24,6 +29,10 @@ impl DMCNode {
         }
     }
 }
+
+/// This struct represents a state machine where each transition between state
+/// is a one or a zero that represents a bit in the input stream. The counts on
+/// the edges represent the probability of the next bit being one or zero.
 pub struct DMCModel {
     /// The current state.
     state: usize,

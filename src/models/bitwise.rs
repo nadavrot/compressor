@@ -1,6 +1,10 @@
+//! This module implements a simple model that predicts the next bit in the
+//! sequence by looking at a history of the n-previous bits.
+//! <https://mattmahoney.net/dc/dce.html#Section_412>
+
 use crate::utils::RECIPROCAL_U32;
 
-use super::model::Model;
+use super::Model;
 
 pub const MODEL_CTX: usize = 29;
 pub const MODEL_LIMIT: usize = 400;
