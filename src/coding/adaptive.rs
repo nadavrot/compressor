@@ -2,14 +2,12 @@
 //! described by Matt Mahoney: https://mattmahoney.net/dc/dce.html#Section_32
 //! and in the book Managing Gigabytes by Witten, Moffat and Bell, section 2.4.
 
+use crate::models::dmc::DMCModel;
+use crate::models::model::Model;
+
 use crate::utils::signatures::{match_signature, ARITH_SIG};
 use crate::utils::signatures::{read32, write32};
 use crate::{Context, Decoder, Encoder};
-
-use super::models::{DMCModel, Model};
-
-const MODEL_CTX: usize = 29;
-const MODEL_LIMIT: usize = 400;
 
 /// An arithmetic encoder that encodes one bit at a time, with a given
 /// probability expressed as a 16-bit integer.

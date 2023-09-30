@@ -4,6 +4,7 @@ pub mod coding;
 pub mod full;
 pub mod lz;
 pub mod nop;
+pub mod models;
 pub mod pager;
 pub mod utils;
 
