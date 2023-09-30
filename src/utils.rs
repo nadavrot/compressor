@@ -292,7 +292,7 @@ pub mod array_encoding {
 /// (1 << code) + read_bits(code). The numbers are shifted by +1, to allow the
 /// encoding of zero. This encoder encodes the range [0 .. u32::MAX-1].
 /// Reference:
-/// https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#offset-codes
+/// <https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#offset-codes>
 pub mod two_stream_encoding {
     use super::number_encoding;
     use crate::bitvector::Bitvector;

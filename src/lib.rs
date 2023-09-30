@@ -3,8 +3,8 @@ pub mod block;
 pub mod coding;
 pub mod full;
 pub mod lz;
-pub mod nop;
 pub mod models;
+pub mod nop;
 pub mod pager;
 pub mod utils;
 

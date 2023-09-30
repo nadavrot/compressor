@@ -11,4 +11,3 @@ pub trait Model {
     /// Update the internal context with the next bit 'bit'.
     fn update(&mut self, bit: u8);
 }
-

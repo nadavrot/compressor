@@ -1,5 +1,5 @@
 //! This module implements an arithmetic code such as the one in zpaq, and
-//! described by Matt Mahoney: https://mattmahoney.net/dc/dce.html#Section_32
+//! described by Matt Mahoney: <https://mattmahoney.net/dc/dce.html#Section_32>
 //! and in the book Managing Gigabytes by Witten, Moffat and Bell, section 2.4.
 
 use crate::models::dmc::DMCModel;

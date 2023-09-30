@@ -93,4 +93,3 @@ fn test_simple_model() {
         assert!(pred > 65_000);
     }
 }
-
