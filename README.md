@@ -3,20 +3,22 @@
 **Compressor** is an educational implementation of a modern lossless compressor.
 The compressor itself is fast and effective, and in fact can outperform gzip in
 both compression size and speed. But the code is minimal and easy to follow.
-The compressor uses modern LZ matching techniques and entropy coding. The
-compressor is written in safe rust without external dependencies. The code is
-written in a clear way for educational purposes.
+The compressor features several compression algorithms that are used at
+different compression levels. The compressor features an effective LZ matcher,
+a modern entropy coder, and an adaptive arithmetic encoder. The compressor is
+written in safe rust without external dependencies. The code is written in a
+clear way for educational purposes.
 
 The matcher in this project has a look-ahead parser, and uses a
 multi-way cache. The Finite State Entropy encoder is similar to the encoders
-used by zstd and lzfse.
-
+used by zstd and lzfse. The adaptive arithmetic encoder has a bitonic and
+Dynamic Markov Compression predictor.
 The technical details are [explained here](docs/details.md).
 
 ## Benchmark
 
 The chart below compares this compressor with several other compressors.
-Each dot in the curve represents a compression level (1 through 9). T
+Each dot in the curve represents a compression level (1 through 9).
 The different programs are evaluated on the enwik9 benchmark, from
 the [Large Text Compression Benchmark](https://mattmahoney.net/dc/text.html).
 
@@ -27,7 +29,6 @@ from source with gcc-12.3, and zstd, lz4 and gzip and bzip2 came from the Ubuntu
 distribution. Compressor was built with Rust 1.73.
 
 ![Size Chart](docs/benchmark.svg)
-
 
 ## Command line tool
 
