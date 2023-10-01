@@ -6,7 +6,7 @@
 use super::Model;
 
 /// Start with context of n bits.
-const DMC_LEVELS: usize = 3;
+const DMC_LEVELS: usize = 16;
 
 /// If the number of states reaches this number, reset the model.
 const DMC_MAX_NODES: usize = 10_000_000;
@@ -41,20 +41,24 @@ pub struct DMCModel {
 }
 
 impl DMCModel {
-    /// Create the initial state machine that has a tree-structure with 'layers'
-    fn init(&mut self, layers: usize) {
+    /// Create the initial state machine that has a cycle with 'num' elements
+    /// in the loop. This value should be a multiple of 8.
+    fn init(&mut self, num: usize) {
         assert_eq!(self.nodes.len(), 0);
         assert_eq!(self.state, 0);
-        let _ = self.add_state(DMCNode::empty());
-        for layer in 1..layers {
-            let len = (1 << layer) - 1;
-            for _ in 0..len {
-                let left = self.add_state(DMCNode::empty());
-                let right = self.add_state(DMCNode::empty());
-                self.nodes[(left / 2) as usize].next[0] = left;
-                self.nodes[(left / 2) as usize].next[1] = right;
-            }
+        self.nodes = vec![DMCNode::empty(); num];
+
+        // Create a cycle with 'num' elements. Each element points to the next
+        // one with both edges. A->B->C ... ->A.
+        //
+        // This is described in:
+        // DATA COMPRESSION USING DYNAMIC MARKOV MODELLING; Cormack, Horspool.
+        // Page 8, section 4.3.
+        for i in 0..num {
+            let next = [((i + 1) % num) as u32, ((i + 1) % num) as u32];
+            self.nodes[i].next = next;
         }
+        self.verify();
     }
 
     /// Allocate a new state and return it's index.
