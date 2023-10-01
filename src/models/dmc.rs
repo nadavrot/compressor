@@ -129,8 +129,8 @@ impl DMCModel {
             for i in 0..self.nodes.len() {
                 let tos = self.nodes[i].next;
                 let counts = self.nodes[i].counts;
-                println!("{} -> {} [label = \"0: {}\"];", i, tos[0], counts[0]);
-                println!("{} -> {} [label = \"1: {}\"];", i, tos[1], counts[1]);
+                println!("{} -> {} [label = \"0) {}\"];", i, tos[0], counts[0]);
+                println!("{} -> {} [label = \"1) {}\"];", i, tos[1], counts[1]);
             }
             println!("}}");
         }
