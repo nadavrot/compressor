@@ -1,6 +1,11 @@
-use crate::models::dmc::DMCModel;
+//! This module contains the implementation of the adaptive arithmetic encoder.
+//! The encoder depends on a model that predicts the next bit, and on an
+//! arithmetic encoder that encodes bit after bit with the predicted
+//! probability.
+
 use crate::models::Model;
 
+use crate::models::mixer::Mixer;
 use crate::utils::signatures::{match_signature, ARITH_SIG};
 use crate::utils::signatures::{read32, write32};
 use crate::{Context, Decoder, Encoder};
@@ -37,7 +42,7 @@ impl<'a> Encoder<'a> for AdaptiveArithmeticEncoder<'a> {
         let mut wrote = ARITH_SIG.len() + 4;
 
         let mut encoder = BitonicEncoder::new(self.output);
-        let mut model = DMCModel::new();
+        let mut model = Mixer::new();
 
         // For each byte:
         for b in self.input {
@@ -74,7 +79,7 @@ impl<'a> Decoder<'a> for AdaptiveArithmeticDecoder<'a> {
         let stream = &self.input[cursor..];
 
         let mut decoder = BitonicDecoder::new(stream);
-        let mut model = DMCModel::new();
+        let mut model = Mixer::new();
 
         let mut wrote = 0;
         // For each byte:

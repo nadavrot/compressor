@@ -2,17 +2,19 @@
 
 **Compressor** is an educational implementation of a modern lossless compressor.
 It is fast and effective, and can in fact outperform gzip in both compression
-size and speed. The code is simple, documented, and easy to follow.  The
+size and speed. The code is simple, documented, and easy to follow. The
 compressor features several compression algorithms that are used at different
 compression levels. It includes an effective LZ matcher, a modern entropy coder,
-and an adaptive arithmetic encoder. Compressor is written in safe rust without
-external dependencies. The code is written in a clear way for educational
-purposes.
+and an adaptive arithmetic encoder with model-mixing. Compressor is written in
+safe rust without external dependencies. The code is written in a clear way for
+educational purposes.
 
 The matcher in this project has a look-ahead parser and uses a multi-way cache.
 The Finite State Entropy encoder is similar to the encoders used by zstd and
-lzfse. The adaptive arithmetic encoder has a bitonic and Dynamic Markov
-Compression predictor.
+lzfse.
+The slow compression mode uses a different technique. The adaptive arithmetic
+encoder has a Bitwise and Dynamic Markov Compression (DMC) predictors that are
+mixed to a single prediction.
 The technical details are [explained here](docs/details.md).
 
 ## Benchmark

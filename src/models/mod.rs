@@ -16,3 +16,4 @@ pub trait Model {
 
 pub mod bitwise;
 pub mod dmc;
+pub mod mixer;

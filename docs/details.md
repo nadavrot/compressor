@@ -225,12 +225,14 @@ and updates the prediction tables.
 
 ## Models
 
-The adaptive arithmetic encoder can use one of two models: Bitonic and DMC. Both
+The adaptive arithmetic encoder can use one of two models: Bitwise and DMC. Both
 of the models try to predict the probability of the next bit, to allow the
-arithmetic encoder to encode the input stream with fewer bits.
+arithmetic encoder to encode the input stream with fewer bits. The current
+implementation of the adaptive arithmetic encoder uses a mixer of the Bitwise
+and DMC models.
 
-### Bitonic
-The Bitonic model is relatively simple. The input stream is a sequence of bits.
+### Bitwise
+The Bitwise model is relatively simple. The input stream is a sequence of bits.
 The last 'n' bits of input are considered the prediction context and are used to
 predict the next bit.  The context bits are used as a key to a large array. Each
 entry in the array holds the number of 1s in the input, and the total number of
@@ -252,3 +254,11 @@ between the states. If an edge becomes too frequently visited the target node is
 split, to allow the model to learn a longer context.
 
 ![DMC](dmc.svg)
+
+### Model mixing
+
+Predicting the next bit in the stream is a machine learning problem. Boosting is
+a well known technique to combine weak models to strong ones. The combined
+prediction of multiple weak models is better than any individual predictor. The
+Mixer module uses a very basic technique to combine the predictors. The mixer 
+averages the predictions of the two models, giving them both an equal weight.
