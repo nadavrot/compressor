@@ -65,6 +65,7 @@ impl DMCModel {
 
     fn verify(&self) {
         if cfg!(debug_assertions) {
+            debug_assert!(self.state < self.nodes.len());
             let len = self.nodes.len();
             for i in 0..len {
                 debug_assert!(
@@ -148,7 +149,6 @@ impl Model for DMCModel {
 
     /// Return a probability prediction in the 16-bit range.
     fn predict(&self) -> u16 {
-        self.verify();
         let counts = self.nodes[self.state].counts;
         let a = counts[1] as u64;
         let b = counts[0] as u64 + a;
@@ -164,7 +164,6 @@ impl Model for DMCModel {
         self.try_clone(bit as usize);
         self.nodes[self.state].counts[bit as usize] += 1;
         self.state = self.nodes[self.state].next[bit as usize] as usize;
-        self.verify();
     }
 }
 
