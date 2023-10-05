@@ -102,7 +102,7 @@ impl DMCModel {
 
         // Don't clone edges that are too weak, or don't contribute much to the
         // sum node.
-        if edge_count < 16 || sum < edge_count * 2 {
+        if edge_count < 4 || sum < edge_count * 2 {
             return;
         }
 
