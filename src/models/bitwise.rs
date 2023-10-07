@@ -7,14 +7,14 @@ use crate::utils::RECIPROCAL_U32;
 use super::Model;
 
 pub const MODEL_CTX: usize = 29;
-pub const MODEL_LIMIT: usize = 400;
+pub const MODEL_LIMIT: usize = 255;
 
 /// A simple model that predicts the probability of the next bit.
 /// CONTEXT_SIZE_BITS defines the size of the cache (history).
 /// LIMIT defines the maximum number of samples for bucket.
 pub struct BitwiseModel<const CONTEXT_SIZE_BITS: usize, const LIMIT: usize> {
     ctx: u64,
-    cache: Vec<(u16, u16)>,
+    cache: Vec<(u8, u8)>,
 }
 
 impl<const CTX_SIZE_BITS: usize, const LIMIT: usize> Model
@@ -32,7 +32,6 @@ impl<const CTX_SIZE_BITS: usize, const LIMIT: usize> Model
         // 'CTX_SIZE_BITS' LSB bits in 'ctx'.
         let key = self.ctx % (1 << CTX_SIZE_BITS);
         let (set, cnt) = self.cache[key as usize];
-        debug_assert!(cnt < 1024);
         let a = set as u64;
         let b = 1 + cnt as u64;
 
@@ -46,10 +45,10 @@ impl<const CTX_SIZE_BITS: usize, const LIMIT: usize> Model
         let key = self.ctx % (1 << CTX_SIZE_BITS);
         let (set, cnt) = &mut self.cache[key as usize];
         *cnt += 1;
-        *set += (bit & 1) as u16;
+        *set += bit & 1;
         // Normalize the count if LIMIT is exceeded. This allows new data to
         // have a higher weight.
-        if *cnt as usize >= LIMIT {
+        if *cnt as usize == LIMIT {
             *set /= 2;
             *cnt /= 2;
         }
@@ -61,7 +60,7 @@ impl<const CTX_SIZE_BITS: usize, const LIMIT: usize> Model
 #[test]
 fn test_simple_model() {
     {
-        let mut model = BitwiseModel::<7, 1024>::new();
+        let mut model = BitwiseModel::<7, 255>::new();
         for _ in 0..10000 {
             model.update(1);
             model.update(0);
@@ -78,7 +77,7 @@ fn test_simple_model() {
     }
 
     {
-        let mut model = BitwiseModel::<7, 256>::new();
+        let mut model = BitwiseModel::<7, 255>::new();
         for _ in 0..10000 {
             model.update(0);
         }
@@ -88,7 +87,7 @@ fn test_simple_model() {
     }
 
     {
-        let mut model = BitwiseModel::<7, 256>::new();
+        let mut model = BitwiseModel::<7, 255>::new();
         for _ in 0..10000 {
             model.update(1);
         }
